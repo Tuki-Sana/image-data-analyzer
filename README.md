@@ -129,6 +129,17 @@ cd src-tauri && cargo test
 pnpm tauri build    # 配布用ビルド
 ```
 
+**環境変数 `CI=1` のとき**（Cursor のターミナルなど）、Tauri 2 の CLI が `--ci` を解釈できず失敗することがあります。その場合は `CI=false pnpm exec tauri build` のように **`CI` を無効化**してから実行してください。
+
+## 配布ビルドと GitHub Releases
+
+1. 上記 **`pnpm tauri build`**（必要なら `CI=false` 付き）で成果物を生成します。バイナリは **git にはコミットしません**。
+2. 典型的な出力先（macOS の例。CPU アーキテクチャでファイル名が変わります）:
+   - `src-tauri/target/release/bundle/dmg/` … **`.dmg`**
+   - `src-tauri/target/release/bundle/macos/` … **`.app`**
+3. GitHub の **Releases** で `v0.2.x` などのタグに紐づくリリースを作成し、**Assets** に `.dmg` 等をドラッグ＆ドロップでアップロードします。本文には `CHANGELOG.md` の該当版を貼るとよいです。
+4. **Linux 用**（`.deb` / `.AppImage` など）は、同じコマンドを **Linux 上**で実行するか、GitHub Actions で `ubuntu-latest` 上に `tauri build` ジョブを足して成果物を Release に添付する方法が一般的です（macOS から単体コマンドだけでは Linux バンドルは作られません）。
+
 推奨エディタ: [VS Code](https://code.visualstudio.com/) と [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar)、[Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode)、[rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)。
 
 ## PCCS 風トーン（実装メモ）

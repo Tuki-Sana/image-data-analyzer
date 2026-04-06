@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Documentation
+
+- [README](README.md): **配布ビルドと GitHub Releases**（成果物の場所、`CI=false` が必要な場合、Linux は別 OS／CI でのビルド）を追記
+
 ## [0.2.2] - 2026-04-08
 
 パッチ相当。**分析 JSON の `schemaVersion`（4）・パレット LocalStorage スキーマ（1）・解析アルゴリズム**に変更はありません。ドキュメント・用語集の拡充と UI の用語集ジャンプが中心です。
