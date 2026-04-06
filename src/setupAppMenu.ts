@@ -10,16 +10,42 @@ export type AppMenuHandlers = {
   copyJson: () => void | Promise<void>;
   saveJson: () => void | Promise<void>;
   savePdf: () => void | Promise<void>;
+  importPickerPaletteReplace: () => void | Promise<void>;
+  importPickerPaletteMerge: () => void | Promise<void>;
+  importAnalysisJson: () => void | Promise<void>;
   openGlossary: () => void | Promise<void>;
+};
+
+export type InstallAppMenuOptions = {
+  /**
+   * メニューから起動したハンドラが未捕捉の reject を返したとき（内部 try/catch で拾えなかった例外など）
+   */
+  onAsyncHandlerError?: (menuLabel: string, error: unknown) => void;
 };
 
 function isTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
 
+function runMenuHandler(
+  menuLabel: string,
+  fn: () => void | Promise<void>,
+  onAsyncHandlerError?: InstallAppMenuOptions["onAsyncHandlerError"],
+): void {
+  void Promise.resolve(fn()).catch((err) => {
+    console.error(`[AppMenu] ${menuLabel}`, err);
+    onAsyncHandlerError?.(menuLabel, err);
+  });
+}
+
 /** macOS ではメニュー最上位は Submenu のみ。アプリ／ファイル／ヘルプの並び。 */
-export async function installAppMenu(h: AppMenuHandlers): Promise<void> {
+export async function installAppMenu(
+  h: AppMenuHandlers,
+  options?: InstallAppMenuOptions,
+): Promise<void> {
   if (!isTauri()) return;
+
+  const onErr = options?.onAsyncHandlerError;
 
   const version = packageJson.version ?? "0.1.0";
 
@@ -55,7 +81,7 @@ export async function installAppMenu(h: AppMenuHandlers): Promise<void> {
         text: "開く…",
         accelerator: "CmdOrCtrl+O",
         action: () => {
-          void h.openImage();
+          runMenuHandler("開く…", () => h.openImage(), onErr);
         },
       }),
       await PredefinedMenuItem.new({ item: "Separator" }),
@@ -64,7 +90,7 @@ export async function installAppMenu(h: AppMenuHandlers): Promise<void> {
         text: "閉じる",
         accelerator: "CmdOrCtrl+W",
         action: () => {
-          void h.closeImage();
+          runMenuHandler("閉じる", () => h.closeImage(), onErr);
         },
       }),
       await PredefinedMenuItem.new({ item: "Separator" }),
@@ -73,7 +99,7 @@ export async function installAppMenu(h: AppMenuHandlers): Promise<void> {
         text: "JSON をコピー",
         accelerator: "CmdOrCtrl+Shift+C",
         action: () => {
-          void h.copyJson();
+          runMenuHandler("JSON をコピー", () => h.copyJson(), onErr);
         },
       }),
       await MenuItem.new({
@@ -81,15 +107,50 @@ export async function installAppMenu(h: AppMenuHandlers): Promise<void> {
         text: "JSON を保存…",
         accelerator: "CmdOrCtrl+Shift+S",
         action: () => {
-          void h.saveJson();
+          runMenuHandler("JSON を保存…", () => h.saveJson(), onErr);
         },
       }),
       await MenuItem.new({
         id: "file-save-pdf",
         text: "PDF を保存…",
         action: () => {
-          void h.savePdf();
+          runMenuHandler("PDF を保存…", () => h.savePdf(), onErr);
         },
+      }),
+      await PredefinedMenuItem.new({ item: "Separator" }),
+      await Submenu.new({
+        text: "読み込み",
+        items: [
+          await MenuItem.new({
+            id: "import-palette-replace",
+            text: "パレット JSON（置換）…",
+            action: () => {
+              runMenuHandler(
+                "パレット JSON（置換）…",
+                () => h.importPickerPaletteReplace(),
+                onErr,
+              );
+            },
+          }),
+          await MenuItem.new({
+            id: "import-palette-merge",
+            text: "パレット JSON（現在と結合）…",
+            action: () => {
+              runMenuHandler(
+                "パレット JSON（現在と結合）…",
+                () => h.importPickerPaletteMerge(),
+                onErr,
+              );
+            },
+          }),
+          await MenuItem.new({
+            id: "import-analysis-json",
+            text: "分析 JSON…",
+            action: () => {
+              runMenuHandler("分析 JSON…", () => h.importAnalysisJson(), onErr);
+            },
+          }),
+        ],
       }),
     ],
   });
@@ -101,7 +162,7 @@ export async function installAppMenu(h: AppMenuHandlers): Promise<void> {
         id: "help-glossary",
         text: "用語集…",
         action: () => {
-          void h.openGlossary();
+          runMenuHandler("用語集…", () => h.openGlossary(), onErr);
         },
       }),
     ],

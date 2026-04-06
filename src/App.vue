@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { open, save } from "@tauri-apps/plugin-dialog";
+import { confirm as tauriConfirm, open, save } from "@tauri-apps/plugin-dialog";
 import GlossaryModal from "./components/GlossaryModal.vue";
+import PickerPaletteSetBar from "./components/PickerPaletteSetBar.vue";
 import PdfExportSurface from "./components/PdfExportSurface.vue";
 import type { Analysis, PickerPaletteEntry, PixelSample } from "./types/analysis";
 import type { ColorAuxMode } from "./utils/colorFormat";
@@ -11,14 +12,43 @@ import { harmonyScoreLegendLines } from "./constants/harmonyScoreLegend";
 import { buildPdfFromElement } from "./utils/pdfExport";
 import { APP_DISPLAY_NAME } from "./constants/appMeta";
 import { installAppMenu } from "./setupAppMenu";
+import { parseAnalysisExportJson } from "./utils/analysisImport";
+import {
+  mergePickerPalettes,
+  parsePickerPaletteExport,
+} from "./utils/pickerPaletteImport";
 import {
   PICKER_LABEL_MAX,
   PICKER_PALETTE_MAX,
-  loadPickerPalette,
-  savePickerPalette,
+  PICKER_SET_NAME_MAX,
+  getActivePaletteIndex,
+  loadPickerPalettesState,
+  renumberAutoPaletteSetNames,
+  savePickerPalettesState,
 } from "./utils/pickerPaletteStorage";
 
 const appDisplayName = APP_DISPLAY_NAME;
+
+function isTauriWindow(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+/** WebView の window.confirm が出ない環境向けに Tauri ダイアログを使う */
+async function paletteDangerConfirm(message: string): Promise<boolean> {
+  if (isTauriWindow()) {
+    try {
+      return await tauriConfirm(message, {
+        title: appDisplayName,
+        kind: "warning",
+        okLabel: "OK",
+        cancelLabel: "キャンセル",
+      });
+    } catch {
+      return false;
+    }
+  }
+  return window.confirm(message);
+}
 
 const COLOR_AUX_LS = "imageMetadataAnalyzer.colorAuxMode";
 
@@ -53,17 +83,130 @@ const pdfHostRef = ref<HTMLElement | null>(null);
 const glossaryOpen = ref(false);
 const glossaryFocusEntryId = ref<string | null>(null);
 
-const pickerPalette = ref<PickerPaletteEntry[]>(loadPickerPalette());
-/** 次に「パレットに追加」するときに付ける名前（任意） */
-const paletteLabelDraft = ref("");
+const paletteState = ref(loadPickerPalettesState());
 
 watch(
-  pickerPalette,
+  paletteState,
   (v) => {
-    savePickerPalette(v);
+    savePickerPalettesState(v);
   },
   { deep: true },
 );
+
+const activePaletteSet = computed(() => {
+  const r = paletteState.value;
+  const i = getActivePaletteIndex(r);
+  return r.palettes[i]!;
+});
+
+const pickerPalette = computed({
+  get(): PickerPaletteEntry[] {
+    return activePaletteSet.value.entries;
+  },
+  set(entries: PickerPaletteEntry[]) {
+    const r = paletteState.value;
+    const i = getActivePaletteIndex(r);
+    const nextPals = r.palettes.map((p, j) =>
+      j === i
+        ? {
+            ...p,
+            entries: entries.slice(0, PICKER_PALETTE_MAX),
+            updatedAt: new Date().toISOString(),
+          }
+        : p,
+    );
+    paletteState.value = { ...r, palettes: nextPals };
+  },
+});
+
+const canDeletePaletteSet = computed(
+  () => paletteState.value.palettes.length > 1,
+);
+
+/** 次に「パレットに追加」するときに付ける名前（任意） */
+const paletteLabelDraft = ref("");
+
+function setActivePaletteId(id: string) {
+  if (!paletteState.value.palettes.some((p) => p.id === id)) return;
+  paletteState.value = { ...paletteState.value, activePaletteId: id };
+}
+
+function updateActiveSetName(name: string) {
+  const t = name.slice(0, PICKER_SET_NAME_MAX);
+  const r = paletteState.value;
+  const i = getActivePaletteIndex(r);
+  const nextPals = r.palettes.map((p, j) =>
+    j === i
+      ? { ...p, name: t, updatedAt: new Date().toISOString() }
+      : p,
+  );
+  paletteState.value = { ...r, palettes: nextPals };
+}
+
+function addPaletteSet() {
+  const r = paletteState.value;
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const n = r.palettes.length + 1;
+  paletteState.value = {
+    ...r,
+    palettes: [
+      ...r.palettes,
+      { id, name: `パレット ${n}`, entries: [], updatedAt: now },
+    ],
+    activePaletteId: id,
+  };
+}
+
+function duplicateActivePaletteSet() {
+  const r = paletteState.value;
+  const i = getActivePaletteIndex(r);
+  const cur = r.palettes[i]!;
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const entries = cur.entries.map((e) => ({
+    ...e,
+    id: crypto.randomUUID(),
+    addedAt: new Date().toISOString(),
+  }));
+  const base = cur.name.trim();
+  const copyLabel = base ? `${base} のコピー` : "無題のコピー";
+  const name = copyLabel.slice(0, PICKER_SET_NAME_MAX);
+  paletteState.value = {
+    ...r,
+    palettes: [...r.palettes, { id, name, entries, updatedAt: now }],
+    activePaletteId: id,
+  };
+}
+
+async function deleteActivePaletteSet() {
+  const r = paletteState.value;
+  if (r.palettes.length <= 1) {
+    showToast("カラーセットは最低 1 つ必要です");
+    return;
+  }
+  const label = activePaletteTitleLabel.value;
+  const n = pickerPalette.value.length;
+  const msg =
+    `「${label}」というカラーセットを削除しますか？\n` +
+    `中の色（${n} 色）もまとめて消えます。元に戻せません。`;
+  if (!(await paletteDangerConfirm(msg))) return;
+  const id = r.activePaletteId;
+  const next = r.palettes.filter((p) => p.id !== id);
+  const newActive = next[0]!.id;
+  const palettes = renumberAutoPaletteSetNames(next);
+  paletteState.value = {
+    ...r,
+    palettes,
+    activePaletteId: newActive,
+  };
+  showToast("カラーセットを削除しました");
+}
+
+const activePaletteTitleLabel = computed(() => {
+  const t = activePaletteSet.value.name.trim();
+  return t.length > 0 ? t : "無題";
+});
 
 function buildExportObject(a: Analysis) {
   const { previewJpegBase64: _omit, ...rest } = a;
@@ -280,21 +423,24 @@ const pickerPaletteLabeledLines = computed(() =>
 );
 
 function buildPickerPaletteExportObject() {
+  const setNameTrimmed = activePaletteSet.value.name.trim();
+  const entries = pickerPalette.value.map((e) => {
+    const base = {
+      id: e.id,
+      r: e.r,
+      g: e.g,
+      b: e.b,
+      hex: e.hex,
+      addedAt: e.addedAt,
+    };
+    const t = e.label?.trim();
+    return t ? { ...base, label: t } : base;
+  });
   return {
     exportedAt: new Date().toISOString(),
     kind: "pickerPalette" as const,
-    entries: pickerPalette.value.map((e) => {
-      const base = {
-        id: e.id,
-        r: e.r,
-        g: e.g,
-        b: e.b,
-        hex: e.hex,
-        addedAt: e.addedAt,
-      };
-      const t = e.label?.trim();
-      return t ? { ...base, label: t } : base;
-    }),
+    ...(setNameTrimmed ? { name: setNameTrimmed } : {}),
+    entries,
   };
 }
 
@@ -341,14 +487,28 @@ function setPaletteEntryLabel(id: string, raw: string) {
   });
 }
 
-function removePaletteEntry(id: string) {
-  pickerPalette.value = pickerPalette.value.filter((e) => e.id !== id);
+async function removePaletteEntry(id: string) {
+  const e = pickerPalette.value.find((x) => x.id === id);
+  if (!e) return;
+  const labelPart = e.label?.trim()
+    ? `「${e.label.trim()}」`
+    : "（名前なし）";
+  const msg =
+    `この色をパレットから削除しますか？\n${labelPart} ${e.hex}\n元に戻せません。`;
+  if (!(await paletteDangerConfirm(msg))) return;
+  pickerPalette.value = pickerPalette.value.filter((x) => x.id !== id);
 }
 
-function clearPickerPalette() {
+async function clearPickerPalette() {
   if (pickerPalette.value.length === 0) return;
+  const n = pickerPalette.value.length;
+  const label = activePaletteTitleLabel.value;
+  const msg =
+    `「${label}」の色を ${n} 色すべて削除しますか？\n` +
+    `カラーセット自体は残り、空のセットになります。元に戻せません。`;
+  if (!(await paletteDangerConfirm(msg))) return;
   pickerPalette.value = [];
-  showToast("パレットを空にしました");
+  showToast("このセットの色をすべて削除しました");
 }
 
 async function copyPickerPaletteHexLines() {
@@ -383,6 +543,85 @@ async function savePickerPaletteJson() {
   }
 }
 
+async function pickJsonFileContents(): Promise<string | null> {
+  const filePath = await open({
+    multiple: false,
+    filters: [{ name: "JSON", extensions: ["json"] }],
+  });
+  if (filePath === null || Array.isArray(filePath)) return null;
+  return invoke<string>("read_text_file", { path: filePath });
+}
+
+async function importPickerPaletteReplace() {
+  try {
+    const text = await pickJsonFileContents();
+    if (text === null) return;
+    let data: unknown;
+    try {
+      data = JSON.parse(text) as unknown;
+    } catch {
+      showToast("JSON の形式が正しくありません");
+      return;
+    }
+    const res = parsePickerPaletteExport(data, () => crypto.randomUUID());
+    if (!res.ok) {
+      showToast(res.error);
+      return;
+    }
+    pickerPalette.value = res.entries;
+    if (res.setName !== undefined) {
+      updateActiveSetName(res.setName);
+    }
+    showToast(`パレットを読み込みました（${res.entries.length} 色）`);
+  } catch (e) {
+    showToast(`読み込みに失敗: ${e}`);
+  }
+}
+
+async function importPickerPaletteMerge() {
+  try {
+    const text = await pickJsonFileContents();
+    if (text === null) return;
+    let data: unknown;
+    try {
+      data = JSON.parse(text) as unknown;
+    } catch {
+      showToast("JSON の形式が正しくありません");
+      return;
+    }
+    const res = parsePickerPaletteExport(data, () => crypto.randomUUID());
+    if (!res.ok) {
+      showToast(res.error);
+      return;
+    }
+    pickerPalette.value = mergePickerPalettes(
+      pickerPalette.value,
+      res.entries,
+    );
+    showToast(`パレットを結合しました（計 ${pickerPalette.value.length} 色）`);
+  } catch (e) {
+    showToast(`読み込みに失敗: ${e}`);
+  }
+}
+
+async function importAnalysisJson() {
+  try {
+    const text = await pickJsonFileContents();
+    if (text === null) return;
+    const res = parseAnalysisExportJson(text);
+    if (!res.ok) {
+      showToast(res.error);
+      return;
+    }
+    analysis.value = res.analysis;
+    picked.value = null;
+    error.value = "";
+    showToast("分析 JSON を読み込みました");
+  } catch (e) {
+    showToast(`読み込みに失敗: ${e}`);
+  }
+}
+
 function openGlossary(focusId?: string | null) {
   glossaryFocusEntryId.value = focusId ?? null;
   glossaryOpen.value = true;
@@ -394,14 +633,24 @@ function onGlossaryClose() {
 }
 
 onMounted(() => {
-  void installAppMenu({
-    openImage,
-    closeImage,
-    copyJson,
-    saveJson,
-    savePdf,
-    openGlossary,
-  });
+  void installAppMenu(
+    {
+      openImage,
+      closeImage,
+      copyJson,
+      saveJson,
+      savePdf,
+      importPickerPaletteReplace,
+      importPickerPaletteMerge,
+      importAnalysisJson,
+      openGlossary,
+    },
+    {
+      onAsyncHandlerError: (label, err) => {
+        showToast(`「${label}」でエラー: ${err}`);
+      },
+    },
+  );
 });
 </script>
 
@@ -561,8 +810,19 @@ onMounted(() => {
           <h2 class="h">スポイトパレット</h2>
           <p class="palette-lead">
             キャラ色など、名前を付けて整理できます（最大
-            {{ PICKER_PALETTE_MAX }} 色）
+            {{ PICKER_PALETTE_MAX }} 色・カラーセットは複数可）
           </p>
+          <PickerPaletteSetBar
+            :palettes="paletteState.palettes"
+            :active-id="paletteState.activePaletteId"
+            :set-name="activePaletteSet.name"
+            :can-delete-set="canDeletePaletteSet"
+            @update:active-id="setActivePaletteId"
+            @update:set-name="updateActiveSetName"
+            @new-set="addPaletteSet"
+            @duplicate="duplicateActivePaletteSet"
+            @delete-set="deleteActivePaletteSet"
+          />
           <div
             v-if="pickerPalette.length"
             class="palette-chip-grid"
@@ -618,6 +878,25 @@ onMounted(() => {
               この端末の LocalStorage に保存され、画像を閉じても残ります。ブラウザやアプリのデータ消去で失われることがあります。大切な場合は JSON で書き出してください。
             </p>
           </details>
+          <p class="palette-actions-heading">読み込み</p>
+          <div class="palette-actions palette-actions-btns">
+            <button
+              type="button"
+              class="palette-tool-btn palette-tool-btn--stacked"
+              @click="importPickerPaletteReplace"
+            >
+              <span class="palette-tool-btn__line1">パレット JSON</span>
+              <span class="palette-tool-btn__line2">（置換）</span>
+            </button>
+            <button
+              type="button"
+              class="palette-tool-btn palette-tool-btn--stacked"
+              @click="importPickerPaletteMerge"
+            >
+              <span class="palette-tool-btn__line1">パレット JSON</span>
+              <span class="palette-tool-btn__line2">（現在と結合）</span>
+            </button>
+          </div>
           <p class="palette-actions-heading">書き出し</p>
           <div class="palette-actions palette-actions-btns">
             <button
@@ -654,11 +933,13 @@ onMounted(() => {
             </button>
             <button
               type="button"
-              class="palette-tool-btn palette-tool-btn--danger"
+              class="palette-tool-btn palette-tool-btn--stacked palette-tool-btn--danger"
               :disabled="pickerPalette.length === 0"
+              title="カラーセットは残り、登録した色だけを空にします"
               @click="clearPickerPalette"
             >
-              すべて削除
+              <span class="palette-tool-btn__line1">色をすべて削除</span>
+              <span class="palette-tool-btn__line2">（セットは残る）</span>
             </button>
           </div>
         </section>
@@ -913,13 +1194,68 @@ onMounted(() => {
     <div v-else-if="!error" class="workspace workspace--empty">
       <div class="empty">
         <p>「開く…」から画像を選択してください。</p>
-        <div v-if="pickerPalette.length" class="empty-palette-card">
+        <div
+          v-if="!pickerPalette.length"
+          class="empty-palette-card empty-palette-card--import-only"
+        >
+          <p class="empty-palette-title">スポイトパレット</p>
+          <p class="muted small empty-palette-note">
+            JSON から読み込むと、画像を開かずに色だけ登録できます（最大
+            {{ PICKER_PALETTE_MAX }} 色）。ファイルメニューの「読み込み」からも同じ操作ができます。
+          </p>
+          <PickerPaletteSetBar
+            class="empty-palette-set-bar"
+            :palettes="paletteState.palettes"
+            :active-id="paletteState.activePaletteId"
+            :set-name="activePaletteSet.name"
+            :can-delete-set="canDeletePaletteSet"
+            @update:active-id="setActivePaletteId"
+            @update:set-name="updateActiveSetName"
+            @new-set="addPaletteSet"
+            @duplicate="duplicateActivePaletteSet"
+            @delete-set="deleteActivePaletteSet"
+          />
+          <p class="palette-actions-heading empty-palette-actions-label">
+            読み込み
+          </p>
+          <div class="palette-actions palette-actions-btns">
+            <button
+              type="button"
+              class="palette-tool-btn palette-tool-btn--stacked"
+              @click="importPickerPaletteReplace"
+            >
+              <span class="palette-tool-btn__line1">パレット JSON</span>
+              <span class="palette-tool-btn__line2">（置換）</span>
+            </button>
+            <button
+              type="button"
+              class="palette-tool-btn palette-tool-btn--stacked"
+              @click="importPickerPaletteMerge"
+            >
+              <span class="palette-tool-btn__line1">パレット JSON</span>
+              <span class="palette-tool-btn__line2">（現在と結合）</span>
+            </button>
+          </div>
+        </div>
+        <div v-else class="empty-palette-card">
           <p class="empty-palette-title">
-            保存中のスポイトパレット（{{ pickerPalette.length }} 色）
+            「{{ activePaletteTitleLabel }}」（{{ pickerPalette.length }} 色）
           </p>
           <p class="muted small empty-palette-note">
             LocalStorage に保存されています。画像なしでもコピー・書き出しできます。
           </p>
+          <PickerPaletteSetBar
+            class="empty-palette-set-bar"
+            :palettes="paletteState.palettes"
+            :active-id="paletteState.activePaletteId"
+            :set-name="activePaletteSet.name"
+            :can-delete-set="canDeletePaletteSet"
+            @update:active-id="setActivePaletteId"
+            @update:set-name="updateActiveSetName"
+            @new-set="addPaletteSet"
+            @duplicate="duplicateActivePaletteSet"
+            @delete-set="deleteActivePaletteSet"
+          />
           <div class="empty-palette-swatches">
             <span
               v-for="e in pickerPalette.slice(0, 16)"
@@ -932,6 +1268,30 @@ onMounted(() => {
               >+{{ pickerPalette.length - 16 }}</span
             >
           </div>
+          <p class="palette-actions-heading empty-palette-actions-label">
+            読み込み
+          </p>
+          <div class="palette-actions palette-actions-btns">
+            <button
+              type="button"
+              class="palette-tool-btn palette-tool-btn--stacked"
+              @click="importPickerPaletteReplace"
+            >
+              <span class="palette-tool-btn__line1">パレット JSON</span>
+              <span class="palette-tool-btn__line2">（置換）</span>
+            </button>
+            <button
+              type="button"
+              class="palette-tool-btn palette-tool-btn--stacked"
+              @click="importPickerPaletteMerge"
+            >
+              <span class="palette-tool-btn__line1">パレット JSON</span>
+              <span class="palette-tool-btn__line2">（現在と結合）</span>
+            </button>
+          </div>
+          <p class="palette-actions-heading empty-palette-actions-label">
+            書き出し
+          </p>
           <div class="palette-actions palette-actions-btns">
             <button
               type="button"
@@ -1747,6 +2107,31 @@ onMounted(() => {
   border-color: #e08080;
 }
 
+/* パレット JSON 読み込み：半幅グリッドでも読みやすい 2 行ラベル */
+.palette-tool-btn--stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.12rem;
+  padding: 0.48rem 0.5rem;
+  line-height: 1.22;
+  text-align: center;
+}
+
+.palette-tool-btn__line1 {
+  display: block;
+  font-weight: 600;
+}
+
+.palette-tool-btn__line2 {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #5a5a62;
+  letter-spacing: 0.01em;
+}
+
 .block-approx {
   padding-top: 0.25rem;
 }
@@ -1878,6 +2263,15 @@ onMounted(() => {
 
 .palette-actions.palette-actions-btns .palette-tool-btn--danger {
   grid-column: 1 / -1;
+}
+
+.empty-palette-set-bar {
+  margin-top: 0.35rem;
+}
+
+.empty-palette-set-bar :deep(.palette-set-bar) {
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.65rem;
 }
 
 .empty-palette-card {
