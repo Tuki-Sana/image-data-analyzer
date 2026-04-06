@@ -8,7 +8,7 @@ use std::path::Path;
 
 use exif::{In, Reader, Tag};
 
-use crate::color_theory::lab_from_srgb;
+use crate::color_theory::{lab_from_srgb, srgb_u8_from_lab, Lab};
 
 /// 支配色推定で目標とするサンプル数（概算）。`step = sqrt(pixels / N)` で間引き、大画像でも点が薄くなりすぎないようにする。
 const DOMINANT_TARGET_SAMPLES: u64 = 100_000;
@@ -66,11 +66,11 @@ fn kmeans_initial_centroids(
         .collect()
 }
 
-/// Lab 距離で k-means。クラスタごとに **RGB の合計**を集計（代表色は sRGB ガムット内の平均）。
-fn kmeans_lab_rgb_sums(
+/// Lab 距離で k-means。収束後の **Lab 重心**とクラスタ点数を返す（代表色は `color_theory::srgb_u8_from_lab` で sRGB に落とす）。
+fn kmeans_lab_centroids_with_counts(
     points: &[(f64, f64, f64, u8, u8, u8)],
     k: usize,
-) -> Vec<(u64, u64, u64, u64)> {
+) -> Vec<(f64, f64, f64, u64)> {
     let n = points.len();
     let k = k.min(n).max(1);
     let mut centroids = kmeans_initial_centroids(points, k);
@@ -125,20 +125,16 @@ fn kmeans_lab_rgb_sums(
         }
     }
 
-    let mut sum_r = vec![0u64; k];
-    let mut sum_g = vec![0u64; k];
-    let mut sum_b = vec![0u64; k];
     let mut counts = vec![0u64; k];
     for i in 0..n {
-        let j = assignments[i];
-        sum_r[j] += u64::from(points[i].3);
-        sum_g[j] += u64::from(points[i].4);
-        sum_b[j] += u64::from(points[i].5);
-        counts[j] += 1;
+        counts[assignments[i]] += 1;
     }
 
     (0..k)
-        .map(|j| (sum_r[j], sum_g[j], sum_b[j], counts[j]))
+        .map(|j| {
+            let (l, a, b) = centroids[j];
+            (l, a, b, counts[j])
+        })
         .collect()
 }
 
@@ -221,7 +217,7 @@ pub fn read_exif_lines(path: &Path) -> Vec<(String, String)> {
     out
 }
 
-/// 支配色（主要色）の推定。目標サンプル数に合わせた間引きのうえで、**Lab 空間の k-means**（k = `max_colors`、最大反復 `KMEANS_MAX_ITER`）でクラスタし、各クラスタの **RGB 平均**を代表色とする。
+/// 支配色（主要色）の推定。目標サンプル数に合わせた間引きのうえで、**Lab 空間の k-means**（k = `max_colors`、最大反復 `KMEANS_MAX_ITER`）でクラスタし、各クラスタの **Lab 重心を sRGB に逆変換**した色を代表色とする。
 pub fn dominant_colors(rgba: &RgbaImage, max_colors: usize) -> Vec<(u8, u8, u8, f32)> {
     let (w, h) = rgba.dimensions();
     if w == 0 || h == 0 || max_colors == 0 {
@@ -236,14 +232,12 @@ pub fn dominant_colors(rgba: &RgbaImage, max_colors: usize) -> Vec<(u8, u8, u8, 
     }
 
     let k = max_colors.min(points.len()).max(1);
-    let clusters = kmeans_lab_rgb_sums(&points, k);
+    let clusters = kmeans_lab_centroids_with_counts(&points, k);
 
     let mut merged_pct: HashMap<(u8, u8, u8), f32> = HashMap::new();
-    for (sr, sg, sb, cnt) in clusters.into_iter().filter(|(_, _, _, c)| *c > 0) {
-        let n = cnt.max(1);
-        let cr = (sr / n).min(255) as u8;
-        let cg = (sg / n).min(255) as u8;
-        let cb = (sb / n).min(255) as u8;
+    for (l, a, b, cnt) in clusters.into_iter().filter(|(_, _, _, c)| *c > 0) {
+        let lab = Lab { l, a, b };
+        let (cr, cg, cb) = srgb_u8_from_lab(&lab);
         let pct = 100.0 * cnt as f32 / sampled as f32;
         *merged_pct.entry((cr, cg, cb)).or_insert(0.0) += pct;
     }
