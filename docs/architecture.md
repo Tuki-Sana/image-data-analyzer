@@ -146,6 +146,6 @@ image-metadata-tool-tauri/
 
 ## 関連ドキュメント
 
-- 利用者向けの機能説明・用語のやさしい説明・開発コマンド: リポジトリ直下の [README.md](../README.md)
+- 利用者向けの機能説明・用語の説明・開発コマンド: リポジトリ直下の [README.md](../README.md)
 - 画像解析・支配色・色差（ΔE2000）・調和スコアなどの**アルゴリズム概要**: [image-analysis.md](./image-analysis.md)
 - バージョンごとの変更履歴: リポジトリ直下の [CHANGELOG.md](../CHANGELOG.md)
