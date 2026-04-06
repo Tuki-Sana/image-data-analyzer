@@ -27,6 +27,7 @@
 - **ドキュメント**: [README](README.md) にドキュメント案内と現行の支配色・調和の要点を反映。[architecture.md](docs/architecture.md) に Rust モジュール対応表と CHANGELOG へのリンク。[image-analysis.md](docs/image-analysis.md) の関連ドキュメントを拡充。用語集の**色相調和スコア**を実装（類似色の重み付き合成・10° アンカー）に同期
 - **PDF レポート**: **Open Color / Tailwind 近似**を **ΔE2000** 付きの表で出力。フッター注記を更新。**色相調和スコア**の凡例に計算概要の 1 行を追加（`harmonyScoreLegend.ts`、UI・PDF 共通）
 - **PDF レポート**: **色彩理論メモ（TheoryBlock）**を追加（注意書き・加重平均色相・概論対応・支配色ごとの L\*C\*h° とトーン）。**セクション順**をメイン画面に合わせ（主要色 → ひと目サマリ → Open/Tailwind → WCAG → 色彩理論 → 調和 → EXIF）。WCAG 見出しを画面と同じ「コントラスト」表記に統一
+- **色相調和**: テンプレート型ごとに **ガウス σ（度）**を分離（補色 20°・トライアド 22°・分割補色 24°・テトラード 24.5°）。[`docs/image-analysis.md`](docs/image-analysis.md) §8・§12（PDF）を更新。凡例・用語集の説明を追随
 
 ## [0.1.0] - 初期リリース
 

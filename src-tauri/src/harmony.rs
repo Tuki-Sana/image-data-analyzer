@@ -14,6 +14,12 @@ pub struct HarmonyScoreDto {
 const ANCHOR_COUNT: usize = 36;
 const ANCHOR_STEP_DEG: f64 = 10.0;
 
+/// ガウス重みの σ（度）。型ごとに最寄り理想角の取りやすさが違うため別値にする。
+const SIGMA_COMPLEMENTARY_DEG: f64 = 20.0;
+const SIGMA_SPLIT_COMPLEMENTARY_DEG: f64 = 24.0;
+const SIGMA_TRIADIC_DEG: f64 = 22.0;
+const SIGMA_TETRAD_DEG: f64 = 24.5;
+
 fn hue_circ_dist_deg(a: f64, b: f64) -> f64 {
     let mut d = (a - b).abs() % 360.0;
     if d > 180.0 {
@@ -85,7 +91,6 @@ fn score_analogous(weighted: &[(f64, f64)]) -> f64 {
 }
 
 pub fn harmony_scores(weighted_hues: &[(f64, f64)]) -> Vec<HarmonyScoreDto> {
-    let sigma = 22.0_f64;
     let mut out = vec![
         HarmonyScoreDto {
             id: "analogous".to_string(),
@@ -95,22 +100,26 @@ pub fn harmony_scores(weighted_hues: &[(f64, f64)]) -> Vec<HarmonyScoreDto> {
         HarmonyScoreDto {
             id: "complementary".to_string(),
             label_ja: "補色（約 180° 対比）".to_string(),
-            score: score_template(weighted_hues, &[0.0, 180.0], sigma),
+            score: score_template(weighted_hues, &[0.0, 180.0], SIGMA_COMPLEMENTARY_DEG),
         },
         HarmonyScoreDto {
             id: "split_complementary".to_string(),
             label_ja: "分割補色（0° / 150° / 210° 付近）".to_string(),
-            score: score_template(weighted_hues, &[0.0, 150.0, 210.0], sigma),
+            score: score_template(
+                weighted_hues,
+                &[0.0, 150.0, 210.0],
+                SIGMA_SPLIT_COMPLEMENTARY_DEG,
+            ),
         },
         HarmonyScoreDto {
             id: "triadic".to_string(),
             label_ja: "トライアド（約 120° 間隔）".to_string(),
-            score: score_template(weighted_hues, &[0.0, 120.0, 240.0], sigma),
+            score: score_template(weighted_hues, &[0.0, 120.0, 240.0], SIGMA_TRIADIC_DEG),
         },
         HarmonyScoreDto {
             id: "tetrad".to_string(),
             label_ja: "テトラード（矩形・60°/180°/240° 系）".to_string(),
-            score: score_template(weighted_hues, &[0.0, 60.0, 180.0, 240.0], sigma * 1.1),
+            score: score_template(weighted_hues, &[0.0, 60.0, 180.0, 240.0], SIGMA_TETRAD_DEG),
         },
     ];
 
@@ -151,7 +160,14 @@ mod tests {
     #[test]
     fn template_triadic_exact_ideal_angles_scores_one() {
         let w = vec![(0.0, 34.0), (120.0, 33.0), (240.0, 33.0)];
-        let s = score_template(&w, &[0.0, 120.0, 240.0], 22.0);
+        let s = score_template(&w, &[0.0, 120.0, 240.0], SIGMA_TRIADIC_DEG);
+        assert!((s - 1.0).abs() < 1e-9, "got {}", s);
+    }
+
+    #[test]
+    fn template_complementary_exact_scores_one() {
+        let w = vec![(0.0, 50.0), (180.0, 50.0)];
+        let s = score_template(&w, &[0.0, 180.0], SIGMA_COMPLEMENTARY_DEG);
         assert!((s - 1.0).abs() < 1e-9, "got {}", s);
     }
 }
