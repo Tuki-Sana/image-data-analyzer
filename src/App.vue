@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, useTemplateRef } from "vue";
 import AnalysisSidePanel from "./components/AnalysisSidePanel.vue";
 import AppHeader from "./components/AppHeader.vue";
 import AppToolbar from "./components/AppToolbar.vue";
@@ -28,13 +28,14 @@ const {
   onGlossaryClose,
 } = useGlossaryModal();
 
+const pdfHostRef = useTemplateRef<HTMLElement>("pdfHost");
+
 const {
   loading,
   error,
   analysis,
   picked,
   pdfExportMount,
-  pdfHostRef,
   previewSrc,
   previewImageAlt,
   exportJsonText,
@@ -45,9 +46,7 @@ const {
   saveJson,
   savePdf,
   importAnalysisJson,
-} = useImageAnalysisSession({ showToast });
-
-void pdfHostRef;
+} = useImageAnalysisSession({ showToast, pdfHostRef });
 
 const {
   paletteState,
@@ -190,7 +189,7 @@ onMounted(() => {
 
     <div
       v-if="pdfExportMount && analysis"
-      ref="pdfHostRef"
+      ref="pdfHost"
       class="pdf-export-host"
       aria-hidden="true"
     >

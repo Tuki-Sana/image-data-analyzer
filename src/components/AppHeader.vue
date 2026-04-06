@@ -88,5 +88,7 @@ defineProps<{ appDisplayName: string }>();
   font-weight: 800;
   letter-spacing: -0.02em;
   line-height: 1.2;
+  /* 太字のキャップ高でアイコンより視覚的に上に寄るのを抑える */
+  transform: translateY(0.07em);
 }
 </style>

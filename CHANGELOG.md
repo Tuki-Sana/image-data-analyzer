@@ -2,6 +2,18 @@
 
 このプロジェクトの重要な変更はこのファイルに記載します。形式は [Keep a Changelog](https://keepachangelog.com/ja/1.1.0/) に近づけています。
 
+## [Unreleased]
+
+### Changed
+
+- **フロント構成**: `App.vue` をヘッダー・ツールバー・分析パネル・プレビュー・空ワークスペースなどのコンポーネントに分割。画面ロジックを `src/composables/` に集約し、分析パネル周りのスタイルを `src/styles/analysisWorkspace.css` で共有（`main.ts` から読み込み）
+- **ヘッダー**: タイトルとマークの縦揃え（flex 中央）およびオプティカル調整（`translateY`）
+- **PDF 書き出し**: ホスト要素の ref を Vue 3.5 の `useTemplateRef` で `useImageAnalysisSession` に渡す形に整理
+
+### Documentation
+
+- [README](README.md): フロントの置き場（`composables` / `styles` 等）を追記。[architecture.md](docs/architecture.md) のディレクトリツリーと Mermaid を現状に同期
+
 ## [0.2.0] - 2026-04-06
 
 ### Added

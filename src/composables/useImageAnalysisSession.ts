@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { computed, nextTick, ref } from "vue";
+import { computed, nextTick, ref, type Ref } from "vue";
 import type { Analysis, PixelSample } from "../types/analysis";
 import { parseAnalysisExportJson } from "../utils/analysisImport";
 import { buildPdfFromElement } from "../utils/pdfExport";
@@ -18,8 +18,10 @@ function buildExportObject(a: Analysis) {
 
 export function useImageAnalysisSession(options: {
   showToast: (msg: string) => void;
+  /** PDF キャプチャ用ホスト要素（`useTemplateRef` 等で App 側から渡す） */
+  pdfHostRef: Ref<HTMLElement | null>;
 }) {
-  const { showToast } = options;
+  const { showToast, pdfHostRef } = options;
 
   const loading = ref(false);
   const error = ref("");
@@ -27,7 +29,6 @@ export function useImageAnalysisSession(options: {
   const picked = ref<PixelSample | null>(null);
 
   const pdfExportMount = ref(false);
-  const pdfHostRef = ref<HTMLElement | null>(null);
 
   const previewSrc = computed(() => {
     const a = analysis.value;
@@ -234,7 +235,6 @@ export function useImageAnalysisSession(options: {
     analysis,
     picked,
     pdfExportMount,
-    pdfHostRef,
     previewSrc,
     previewImageAlt,
     exportJsonText,
