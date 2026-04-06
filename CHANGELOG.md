@@ -13,10 +13,12 @@
 - メニューから起動した非同期ハンドラの**未捕捉 reject**をログ・トースト
 - カラーセット削除後、`パレット N` 形式の名前の**連番振り直し**
 - Vitest による `analysisImport` / `pickerPaletteImport` / `pickerPaletteStorage` のユニットテスト
+- [`docs/image-analysis.md`](docs/image-analysis.md): 画像解析・配色ロジックの実装メモ（[`docs/architecture.md`](docs/architecture.md)・[README](README.md) からリンク）
 
 ### Changed
 
 - スポイトパレットの LocalStorage を **v1 スキーマ**（`palettes[]` 等）に変更。旧エントリ配列は自動移行
+- **支配色推定**（`meta::dominant_colors`）: 目標サンプル数に基づく間引き + **Lab 空間のビン分割**とビン内 **RGB 平均**（従来の RGB 量子化 `q=28` から変更）
 
 ## [0.1.0] - 初期リリース
 

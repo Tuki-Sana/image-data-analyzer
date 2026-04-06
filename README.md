@@ -85,7 +85,7 @@ git push origin v0.2.0
 | 画像解析・配色ロジック | Rust（`src-tauri`） |
 | テスト | Vitest（フロントエンド）、`cargo test`（Rust） |
 
-処理の流れとディレクトリ構成は [docs/architecture.md](docs/architecture.md)（Mermaid 図・簡易ツリー）にまとめています。
+処理の流れとディレクトリ構成は [docs/architecture.md](docs/architecture.md)（Mermaid 図・簡易ツリー）、**解析ロジックの要点**は [docs/image-analysis.md](docs/image-analysis.md) にまとめています。
 
 ## CI（GitHub Actions）
 
