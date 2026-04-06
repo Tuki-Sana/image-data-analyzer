@@ -212,6 +212,12 @@ onUnmounted(() => {
   transform: rotate(90deg);
 }
 
+.glossary-toc-summary:focus-visible {
+  outline: 2px solid var(--link, #2563eb);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .glossary-toc {
   padding: 0;
 }
