@@ -13,27 +13,133 @@ use crate::color_theory::lab_from_srgb;
 /// 支配色推定で目標とするサンプル数（概算）。`step = sqrt(pixels / N)` で間引き、大画像でも点が薄くなりすぎないようにする。
 const DOMINANT_TARGET_SAMPLES: u64 = 100_000;
 
-/// Lab 空間でのビン幅。知覚に近いマージの目安（フェーズ1: k-means 前の量子化）。
-const LAB_BIN_L: f64 = 5.0;
-const LAB_BIN_AB: f64 = 7.0;
+/// Lab 空間 k-means の最大反復回数。
+const KMEANS_MAX_ITER: usize = 24;
 
-#[derive(Clone, Copy, Hash, Eq, PartialEq)]
-struct LabBin(i32, i32, i32);
-
-#[derive(Default)]
-struct DominantBinAccum {
-    sum_r: u64,
-    sum_g: u64,
-    sum_b: u64,
-    count: u64,
+#[inline]
+fn lab_dist2(l1: f64, a1: f64, b1: f64, l2: f64, a2: f64, b2: f64) -> f64 {
+    let dl = l1 - l2;
+    let da = a1 - a2;
+    let db = b1 - b2;
+    dl * dl + da * da + db * db
 }
 
-fn lab_bin_index(l: f64, a: f64, b: f64) -> LabBin {
-    LabBin(
-        (l / LAB_BIN_L).floor() as i32,
-        (a / LAB_BIN_AB).floor() as i32,
-        (b / LAB_BIN_AB).floor() as i32,
-    )
+/// 透明でないピクセルを間引き、(L\*, a\*, b\*, R, G, B) の列とサンプル総数を返す。
+fn collect_dominant_samples(
+    rgba: &RgbaImage,
+    step: usize,
+) -> (Vec<(f64, f64, f64, u8, u8, u8)>, u64) {
+    let (w, h) = rgba.dimensions();
+    let mut points = Vec::new();
+    for y in (0..h).step_by(step) {
+        for x in (0..w).step_by(step) {
+            let p = rgba.get_pixel(x, y);
+            if p[3] < 16 {
+                continue;
+            }
+            let r = p[0];
+            let g = p[1];
+            let b = p[2];
+            let lab = lab_from_srgb(r, g, b);
+            points.push((lab.l, lab.a, lab.b, r, g, b));
+        }
+    }
+    let n = points.len() as u64;
+    (points, n)
+}
+
+/// 等間隔にサンプルを選び初期重心にする（決定的）。
+fn kmeans_initial_centroids(
+    points: &[(f64, f64, f64, u8, u8, u8)],
+    k: usize,
+) -> Vec<(f64, f64, f64)> {
+    let n = points.len();
+    let k = k.min(n).max(1);
+    if k == n {
+        return points.iter().map(|p| (p.0, p.1, p.2)).collect();
+    }
+    (0..k)
+        .map(|j| {
+            let i = j * (n - 1) / (k - 1).max(1);
+            (points[i].0, points[i].1, points[i].2)
+        })
+        .collect()
+}
+
+/// Lab 距離で k-means。クラスタごとに **RGB の合計**を集計（代表色は sRGB ガムット内の平均）。
+fn kmeans_lab_rgb_sums(
+    points: &[(f64, f64, f64, u8, u8, u8)],
+    k: usize,
+) -> Vec<(u64, u64, u64, u64)> {
+    let n = points.len();
+    let k = k.min(n).max(1);
+    let mut centroids = kmeans_initial_centroids(points, k);
+    let mut assignments = vec![0usize; n];
+
+    for _ in 0..KMEANS_MAX_ITER {
+        let mut changed = false;
+        for i in 0..n {
+            let mut best_j = 0usize;
+            let mut best_d = f64::INFINITY;
+            for j in 0..k {
+                let c = centroids[j];
+                let d = lab_dist2(points[i].0, points[i].1, points[i].2, c.0, c.1, c.2);
+                if d < best_d {
+                    best_d = d;
+                    best_j = j;
+                }
+            }
+            if assignments[i] != best_j {
+                changed = true;
+            }
+            assignments[i] = best_j;
+        }
+
+        let mut sum_l = vec![0.0_f64; k];
+        let mut sum_a = vec![0.0_f64; k];
+        let mut sum_b = vec![0.0_f64; k];
+        let mut counts = vec![0usize; k];
+        for i in 0..n {
+            let j = assignments[i];
+            sum_l[j] += points[i].0;
+            sum_a[j] += points[i].1;
+            sum_b[j] += points[i].2;
+            counts[j] += 1;
+        }
+
+        for j in 0..k {
+            if counts[j] == 0 {
+                let idx = (j.wrapping_mul(7919).wrapping_add(n / 2)) % n;
+                centroids[j] = (points[idx].0, points[idx].1, points[idx].2);
+            } else {
+                centroids[j] = (
+                    sum_l[j] / counts[j] as f64,
+                    sum_a[j] / counts[j] as f64,
+                    sum_b[j] / counts[j] as f64,
+                );
+            }
+        }
+
+        if !changed {
+            break;
+        }
+    }
+
+    let mut sum_r = vec![0u64; k];
+    let mut sum_g = vec![0u64; k];
+    let mut sum_b = vec![0u64; k];
+    let mut counts = vec![0u64; k];
+    for i in 0..n {
+        let j = assignments[i];
+        sum_r[j] += u64::from(points[i].3);
+        sum_g[j] += u64::from(points[i].4);
+        sum_b[j] += u64::from(points[i].5);
+        counts[j] += 1;
+    }
+
+    (0..k)
+        .map(|j| (sum_r[j], sum_g[j], sum_b[j], counts[j]))
+        .collect()
 }
 
 #[derive(Clone, Debug, Default, serde::Serialize)]
@@ -115,7 +221,7 @@ pub fn read_exif_lines(path: &Path) -> Vec<(String, String)> {
     out
 }
 
-/// 支配色（主要色）の推定。フェーズ1: 目標サンプル数に合わせた間引き + **Lab 空間でのビン分割**後、各ビン内の **RGB 平均**を代表色とする（k-means ではない）。
+/// 支配色（主要色）の推定。目標サンプル数に合わせた間引きのうえで、**Lab 空間の k-means**（k = `max_colors`、最大反復 `KMEANS_MAX_ITER`）でクラスタし、各クラスタの **RGB 平均**を代表色とする。
 pub fn dominant_colors(rgba: &RgbaImage, max_colors: usize) -> Vec<(u8, u8, u8, f32)> {
     let (w, h) = rgba.dimensions();
     if w == 0 || h == 0 || max_colors == 0 {
@@ -124,40 +230,26 @@ pub fn dominant_colors(rgba: &RgbaImage, max_colors: usize) -> Vec<(u8, u8, u8, 
     let pixels = (w as u64) * (h as u64);
     let step = ((pixels as f64 / DOMINANT_TARGET_SAMPLES as f64).sqrt().ceil() as u64).max(1) as usize;
 
-    let mut map: HashMap<LabBin, DominantBinAccum> = HashMap::new();
-    let mut sampled = 0u64;
-    for y in (0..h).step_by(step) {
-        for x in (0..w).step_by(step) {
-            let p = rgba.get_pixel(x, y);
-            if p[3] < 16 {
-                continue;
-            }
-            let r = p[0];
-            let g = p[1];
-            let b = p[2];
-            let lab = lab_from_srgb(r, g, b);
-            let key = lab_bin_index(lab.l, lab.a, lab.b);
-            let acc = map.entry(key).or_default();
-            acc.sum_r += u64::from(r);
-            acc.sum_g += u64::from(g);
-            acc.sum_b += u64::from(b);
-            acc.count += 1;
-            sampled += 1;
-        }
-    }
+    let (points, sampled) = collect_dominant_samples(rgba, step);
     if sampled == 0 {
         return Vec::new();
     }
-    let mut v: Vec<(u8, u8, u8, f32)> = map
-        .into_values()
-        .map(|acc| {
-            let n = acc.count.max(1);
-            let cr = (acc.sum_r / n).min(255) as u8;
-            let cg = (acc.sum_g / n).min(255) as u8;
-            let cb = (acc.sum_b / n).min(255) as u8;
-            let pct = 100.0 * acc.count as f32 / sampled as f32;
-            (cr, cg, cb, pct)
-        })
+
+    let k = max_colors.min(points.len()).max(1);
+    let clusters = kmeans_lab_rgb_sums(&points, k);
+
+    let mut merged_pct: HashMap<(u8, u8, u8), f32> = HashMap::new();
+    for (sr, sg, sb, cnt) in clusters.into_iter().filter(|(_, _, _, c)| *c > 0) {
+        let n = cnt.max(1);
+        let cr = (sr / n).min(255) as u8;
+        let cg = (sg / n).min(255) as u8;
+        let cb = (sb / n).min(255) as u8;
+        let pct = 100.0 * cnt as f32 / sampled as f32;
+        *merged_pct.entry((cr, cg, cb)).or_insert(0.0) += pct;
+    }
+    let mut v: Vec<(u8, u8, u8, f32)> = merged_pct
+        .into_iter()
+        .map(|((r, g, b), pct)| (r, g, b, pct))
         .collect();
     v.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal));
     v.truncate(max_colors);
