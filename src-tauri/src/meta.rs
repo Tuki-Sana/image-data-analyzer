@@ -11,7 +11,7 @@ use exif::{In, Reader, Tag};
 use crate::color_theory::{lab_from_srgb, srgb_u8_from_lab, Lab};
 
 /// 支配色推定で目標とするサンプル数（概算）。`step = sqrt(pixels / N)` で間引き、大画像でも点が薄くなりすぎないようにする。
-const DOMINANT_TARGET_SAMPLES: u64 = 100_000;
+const DOMINANT_TARGET_SAMPLES: u64 = 150_000;
 
 /// Lab 空間 k-means の最大反復回数。
 const KMEANS_MAX_ITER: usize = 32;

@@ -10,6 +10,10 @@ pub struct HarmonyScoreDto {
     pub score: f64,
 }
 
+/// テンプレート調和の向きを合わせるアンカー数（`ANCHOR_STEP_DEG` 刻みで 1 周）。
+const ANCHOR_COUNT: usize = 36;
+const ANCHOR_STEP_DEG: f64 = 10.0;
+
 fn hue_circ_dist_deg(a: f64, b: f64) -> f64 {
     let mut d = (a - b).abs() % 360.0;
     if d > 180.0 {
@@ -29,9 +33,8 @@ fn score_template(weighted: &[(f64, f64)], ideal_rels: &[f64], sigma_deg: f64) -
     }
 
     let mut best_global = 0.0f64;
-    // アンカーを 15° 刻みで探索（相対テンプレートの向きを合わせる）
-    for k in 0..24 {
-        let anchor = k as f64 * 15.0;
+    for k in 0..ANCHOR_COUNT {
+        let anchor = k as f64 * ANCHOR_STEP_DEG;
         let ideals: Vec<f64> = ideal_rels
             .iter()
             .map(|r| (anchor + r).rem_euclid(360.0))
@@ -143,5 +146,12 @@ mod tests {
     fn complementary_pair_low_analogous() {
         let w = vec![(0.0, 50.0), (180.0, 50.0)];
         assert!(score_analogous(&w) < 0.3);
+    }
+
+    #[test]
+    fn template_triadic_exact_ideal_angles_scores_one() {
+        let w = vec![(0.0, 34.0), (120.0, 33.0), (240.0, 33.0)];
+        let s = score_template(&w, &[0.0, 120.0, 240.0], 22.0);
+        assert!((s - 1.0).abs() < 1e-9, "got {}", s);
     }
 }
