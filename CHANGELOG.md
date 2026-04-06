@@ -4,11 +4,16 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-04-07
+
+パッチ相当。**分析 JSON の `schemaVersion`・パレット LocalStorage スキーマ・利用者向けの主な操作**に変更はありません（フロントの構成整理と UI 微調整・ドキュメントが中心）。
+
 ### Changed
 
 - **フロント構成**: `App.vue` をヘッダー・ツールバー・分析パネル・プレビュー・空ワークスペースなどのコンポーネントに分割。画面ロジックを `src/composables/` に集約し、分析パネル周りのスタイルを `src/styles/analysisWorkspace.css` で共有（`main.ts` から読み込み）。画像未選択時のパレット案内は `PaletteHomeCard.vue` に切り出し
 - **ヘッダー**: タイトルとマークの縦揃え（flex 中央）およびオプティカル調整（`translateY`）
 - **PDF 書き出し**: ホスト要素の ref を Vue 3.5 の `useTemplateRef` で `useImageAnalysisSession` に渡す形に整理
+- **用語集**: 目次 `<summary>` に `focus-visible` のフォーカスリング
 
 ### Documentation
 
