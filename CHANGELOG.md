@@ -7,7 +7,9 @@
 ### Changed
 
 - **用語集**（[`src/constants/glossaryJa.ts`](src/constants/glossaryJa.ts)）: はじめにでローカル完結を明記。**支配色・主要色（推定）と画面上の％**、**ひと目サマリ（gist）**、**スポイトパレットの保存とバックアップ**を新設。調和・WCAG・L* 節で「％＝間引きサンプル上の目安」と README / `image-analysis.md` に整合。**分析結果の JSON** 節でパレット JSON との区別・`schema_version` / JSON `schemaVersion` を追記
+- **用語集**（続き）: はじめにに**おすすめの読み順**と**目次の並びの説明**を追加。スポイトパレット節に **48 色上限・複数セット・メニューからの JSON 操作**を本文に明記（README なしでも要点がわかるように）
 - **解析パネル**（[`src/components/AnalysisSidePanel.vue`](src/components/AnalysisSidePanel.vue)）: 主要色・ひと目サマリ・WCAG・色相調和の各ブロックから、対応する用語集節へジャンプするボタンを追加
+- [README](README.md): 用語表の**支配色**に「％は間引きサンプル上の目安」、**WCAG** に「％が大きい順」、**調和スコア**の重み表現を用語集と揃えて更新
 
 ### Documentation
 
