@@ -27,6 +27,7 @@ const emit = defineEmits<{
   copyPickerPaletteLabeledLines: [];
   copyPickerPaletteJson: [];
   savePickerPaletteJson: [];
+  openGlossary: [entryId: string];
 }>();
 </script>
 
@@ -39,6 +40,13 @@ const emit = defineEmits<{
     <p class="muted small empty-palette-note">
       JSON から読み込むと、画像を開かずに色だけ登録できます（最大
       {{ PICKER_PALETTE_MAX }} 色）。ファイルメニューの「読み込み」からも同じ操作ができます。
+      <button
+        type="button"
+        class="glossary-jump"
+        @click="emit('openGlossary', 'picker-palette')"
+      >
+        用語集
+      </button>
     </p>
     <PickerPaletteSetBar
       class="empty-palette-set-bar"
@@ -78,6 +86,13 @@ const emit = defineEmits<{
     </p>
     <p class="muted small empty-palette-note">
       LocalStorage に保存されています。画像なしでもコピー・書き出しできます。
+      <button
+        type="button"
+        class="glossary-jump"
+        @click="emit('openGlossary', 'picker-palette')"
+      >
+        用語集
+      </button>
     </p>
     <PickerPaletteSetBar
       class="empty-palette-set-bar"

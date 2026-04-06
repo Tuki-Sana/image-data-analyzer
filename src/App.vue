@@ -167,6 +167,7 @@ onMounted(() => {
       @copy-picker-palette-labeled-lines="copyPickerPaletteLabeledLines"
       @copy-picker-palette-json="copyPickerPaletteJson"
       @save-picker-palette-json="savePickerPaletteJson"
+      @open-glossary="openGlossary"
     />
 
     </main>

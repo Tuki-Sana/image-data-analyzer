@@ -26,6 +26,7 @@ const emit = defineEmits<{
   copyPickerPaletteLabeledLines: [];
   copyPickerPaletteJson: [];
   savePickerPaletteJson: [];
+  openGlossary: [entryId: string];
 }>();
 </script>
 
@@ -56,6 +57,7 @@ const emit = defineEmits<{
         @copy-picker-palette-labeled-lines="emit('copyPickerPaletteLabeledLines')"
         @copy-picker-palette-json="emit('copyPickerPaletteJson')"
         @save-picker-palette-json="emit('savePickerPaletteJson')"
+        @open-glossary="emit('openGlossary', $event)"
       />
     </div>
   </div>
