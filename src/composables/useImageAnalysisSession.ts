@@ -16,6 +16,10 @@ function buildExportObject(a: Analysis) {
   };
 }
 
+function buildExportJson(a: Analysis): string {
+  return JSON.stringify(buildExportObject(a), null, 2);
+}
+
 export function useImageAnalysisSession(options: {
   showToast: (msg: string) => void;
   /** PDF キャプチャ用ホスト要素（`useTemplateRef` 等で App 側から渡す） */
@@ -46,7 +50,7 @@ export function useImageAnalysisSession(options: {
   const exportJsonText = computed(() => {
     const a = analysis.value;
     if (!a) return "";
-    return JSON.stringify(buildExportObject(a), null, 2);
+    return buildExportJson(a);
   });
 
   async function openImage() {
@@ -97,15 +101,13 @@ export function useImageAnalysisSession(options: {
     const a = analysis.value;
     if (!a || !el) return;
     const rect = el.getBoundingClientRect();
-    const nx = ((clientX - rect.left) / rect.width) * el.naturalWidth;
-    const ny = ((clientY - rect.top) / rect.height) * el.naturalHeight;
     const ox = Math.min(
       a.width - 1,
-      Math.max(0, Math.floor((nx / a.previewWidth) * a.width)),
+      Math.max(0, Math.floor(((clientX - rect.left) / rect.width) * a.width)),
     );
     const oy = Math.min(
       a.height - 1,
-      Math.max(0, Math.floor((ny / a.previewHeight) * a.height)),
+      Math.max(0, Math.floor(((clientY - rect.top) / rect.height) * a.height)),
     );
     try {
       picked.value = await invoke<PixelSample | null>("sample_pixel", {
@@ -133,7 +135,7 @@ export function useImageAnalysisSession(options: {
   async function copyJson() {
     const a = analysis.value;
     if (!a) return;
-    const text = JSON.stringify(buildExportObject(a), null, 2);
+    const text = buildExportJson(a);
     try {
       await navigator.clipboard.writeText(text);
       showToast("JSON をクリップボードにコピーしました");
@@ -150,7 +152,7 @@ export function useImageAnalysisSession(options: {
       defaultPath: "color-analysis.json",
     });
     if (outPath === null) return;
-    const text = JSON.stringify(buildExportObject(a), null, 2);
+    const text = buildExportJson(a);
     try {
       await invoke("save_text_file", { path: outPath, contents: text });
       showToast("JSON を保存しました");

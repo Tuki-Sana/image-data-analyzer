@@ -128,9 +128,9 @@ pub fn tailwind_subset_palette() -> &'static [PaletteSwatchLab] {
     })
 }
 
-pub fn nearest_in_palette(r: u8, g: u8, b: u8, palette: &[PaletteSwatchLab]) -> (&PaletteSwatchLab, f64) {
+pub fn nearest_in_palette(r: u8, g: u8, b: u8, palette: &[PaletteSwatchLab]) -> Option<(&PaletteSwatchLab, f64)> {
     let lab = lab_from_srgb(r, g, b);
-    let mut best_sw: &PaletteSwatchLab = &palette[0];
+    let mut best_sw: &PaletteSwatchLab = palette.first()?;
     let mut best_de = delta_e_2000(lab, best_sw.lab);
     for sw in &palette[1..] {
         let de = delta_e_2000(lab, sw.lab);
@@ -139,7 +139,7 @@ pub fn nearest_in_palette(r: u8, g: u8, b: u8, palette: &[PaletteSwatchLab]) -> 
             best_sw = sw;
         }
     }
-    (best_sw, best_de)
+    Some((best_sw, best_de))
 }
 
 pub fn match_dominants(
@@ -151,9 +151,9 @@ pub fn match_dominants(
     }
     dominants
         .iter()
-        .map(|&(dr, dg, db, pct)| {
-            let (sw, de) = nearest_in_palette(dr, dg, db, palette);
-            DominantPaletteMatch {
+        .filter_map(|&(dr, dg, db, pct)| {
+            let (sw, de) = nearest_in_palette(dr, dg, db, palette)?;
+            Some(DominantPaletteMatch {
                 dom_r: dr,
                 dom_g: dg,
                 dom_b: db,
@@ -163,7 +163,7 @@ pub fn match_dominants(
                 sw_g: sw.g,
                 sw_b: sw.b,
                 delta_e: de,
-            }
+            })
         })
         .collect()
 }
@@ -175,8 +175,13 @@ mod tests {
     #[test]
     fn tailwind_nearest_blue_500_exact() {
         let p = tailwind_subset_palette();
-        let (sw, de) = nearest_in_palette(59, 130, 246, p);
+        let (sw, de) = nearest_in_palette(59, 130, 246, p).expect("palette must not be empty");
         assert_eq!(sw.name, "blue-500");
         assert!(de < 1.0, "ΔE00 self-match should be tiny, got {}", de);
+    }
+
+    #[test]
+    fn nearest_in_palette_empty_returns_none() {
+        assert!(nearest_in_palette(255, 0, 0, &[]).is_none());
     }
 }
