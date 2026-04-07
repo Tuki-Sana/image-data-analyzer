@@ -1,28 +1,38 @@
 //! ポジティブ/ネガティブシェイプ分析
 //!
-//! Canny エッジ検出 → ガウシアンブラーで局所エッジ密度マップを生成し、
-//! 密度の高い領域（モノが「ある」場所）をポジティブシェイプとして判定する。
-//! 輝度ではなく「内容の密集度」を基準にするため、背景色に依存しない。
+//! ## アルゴリズム（背景除去型）
+//!
+//! 1. Canny エッジ検出
+//! 2. エッジを膨張（`DILATION_RADIUS` px）して輪郭の隙間を塞ぐ
+//! 3. 膨張エッジを「バリア」として、4隅をシードに連結成分ラベリング
+//!    → 4隅と繋がる領域 = ネガティブ（背景・余白）
+//!    → どの隅とも繋がらない領域 = ポジティブ（形のある物体）
+//!
+//! 輝度ではなくシェイプの「閉じ具合」で判定するため、
+//! 白い雲・暗い物体・透明背景いずれにも対応できる。
 
+use std::collections::HashSet;
 use std::io::Cursor;
 use std::path::Path;
 
 use base64::Engine;
 use image::{GenericImageView, GrayImage, ImageFormat, Luma, RgbImage};
 use imageproc::edges::canny;
-use imageproc::filter::gaussian_blur_f32;
+use imageproc::distance_transform::Norm;
+use imageproc::morphology::dilate;
 use imageproc::region_labelling::{connected_components, Connectivity};
 use serde::Serialize;
 
-/// シェイプ分析の処理サイズ上限（長辺）。分析精度とパフォーマンスのバランス。
+/// シェイプ分析の処理サイズ上限（長辺）。
 const SHAPE_MAX_SIDE: u32 = 700;
 
 /// Canny エッジ検出の閾値（低/高）。
 const CANNY_LOW: f32 = 12.0;
 const CANNY_HIGH: f32 = 35.0;
 
-/// 密度マップのガウシアン σ（ピクセル）。大きいほど広い範囲を「密集あり」と判定する。
-const DENSITY_SIGMA: f32 = 14.0;
+/// エッジ膨張の半径（px）。大きいほど輪郭の隙間を塞ぎやすいが、細かいシェイプが潰れる。
+/// 700px 画像では 10px 程度が雲・イラスト・写真に対してバランスが良い。
+const DILATION_RADIUS: u8 = 10;
 
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +72,7 @@ fn encode_rgb_png(img: &RgbImage) -> Result<String, String> {
 }
 
 /// ポジ/ネガマップからスタークビュー（白黒 PNG）を生成する。
+/// 白 = ポジティブ、黒 = ネガティブ（アート練習の慣習に合わせる）。
 fn build_stark(positive_map: &[bool], w: u32, h: u32) -> GrayImage {
     GrayImage::from_fn(w, h, |x, y| {
         if positive_map[(y * w + x) as usize] {
@@ -105,10 +116,9 @@ fn build_overlay(rgb: &RgbImage, positive_map: &[bool], w: u32, h: u32) -> RgbIm
 pub fn analyze_shape_path(path_str: &str) -> Result<ShapeAnalysisDto, String> {
     let path = Path::new(path_str);
     let img = image::open(path).map_err(|e| e.to_string())?;
-    let (orig_w, orig_h) = img.dimensions();
 
-    // 処理サイズにリサイズ（大きい画像でも一定時間で処理できるよう）
-    let proc = if orig_w.max(orig_h) > SHAPE_MAX_SIDE {
+    // 処理サイズにリサイズ
+    let proc = if img.dimensions().0.max(img.dimensions().1) > SHAPE_MAX_SIDE {
         img.thumbnail(SHAPE_MAX_SIDE, SHAPE_MAX_SIDE)
     } else {
         img.clone()
@@ -116,40 +126,54 @@ pub fn analyze_shape_path(path_str: &str) -> Result<ShapeAnalysisDto, String> {
     let (pw, ph) = proc.dimensions();
     let total = (pw * ph) as f32;
 
-    // グレースケール変換 → Canny エッジ検出
+    // グレースケール → Canny エッジ検出
     let gray = proc.to_luma8();
     let edges: GrayImage = canny(&gray, CANNY_LOW, CANNY_HIGH);
 
-    // エッジ密度（全体の何%がエッジか）
+    // エッジ密度（統計値として保持）
     let edge_count = edges.pixels().filter(|p| p[0] > 0).count() as f32;
     let edge_density = edge_count / total;
 
-    // ガウシアンブラーで「局所エッジ密度マップ」を生成
-    let density: GrayImage = gaussian_blur_f32(&edges, DENSITY_SIGMA);
+    // エッジを膨張して輪郭の隙間を塞ぐ（Chebyshev 距離 = 正方形カーネル）
+    let dilated: GrayImage = dilate(&edges, Norm::LInf, DILATION_RADIUS);
 
-    // 密度マップの平均値を基準に閾値を決定
-    // 平均の 40% 以上の密度領域をポジティブと判定
-    // 最低閾値 6 を設けて全黒画像でのフォールバックにする
-    let density_vals: Vec<f32> = density.pixels().map(|p| p[0] as f32).collect();
-    let mean_density: f32 = density_vals.iter().sum::<f32>() / density_vals.len() as f32;
-    let threshold = (mean_density * 0.40).max(6.0_f32);
+    // 膨張エッジをバリアとして、非エッジ領域を連結成分ラベリング
+    // background = Luma([0]) → エッジ部分（255）はラベル 0 として扱われ区切りになる
+    let open_space = GrayImage::from_fn(pw, ph, |x, y| {
+        // 膨張エッジ = 0（バリア）、それ以外 = 255（開放空間）
+        Luma([if dilated.get_pixel(x, y)[0] > 0 { 0u8 } else { 255u8 }])
+    });
+    let labeled = connected_components(&open_space, Connectivity::Four, Luma([0u8]));
 
-    // ポジティブマップを構築
-    let positive_map: Vec<bool> = density_vals.iter().map(|&v| v > threshold).collect();
+    // 4隅のラベルを収集 → これらが背景（ネガティブ）のラベル
+    let corner_labels: HashSet<u32> = [
+        labeled.get_pixel(0, 0)[0],
+        labeled.get_pixel(pw - 1, 0)[0],
+        labeled.get_pixel(0, ph - 1)[0],
+        labeled.get_pixel(pw - 1, ph - 1)[0],
+    ]
+    .iter()
+    .copied()
+    .filter(|&l| l != 0) // ラベル 0 はバリア上のピクセル（除外）
+    .collect();
+
+    // ポジティブマップ：ラベルが0でなく、かつ背景ラベルでもない領域
+    let positive_map: Vec<bool> = (0..ph)
+        .flat_map(|y| (0..pw).map(move |x| (x, y)))
+        .map(|(x, y)| {
+            let label = labeled.get_pixel(x, y)[0];
+            label != 0 && !corner_labels.contains(&label)
+        })
+        .collect();
+
     let positive_count = positive_map.iter().filter(|&&v| v).count() as f32;
     let positive_area_pct = 100.0 * positive_count / total;
     let negative_area_pct = 100.0 - positive_area_pct;
 
-    // ポジティブ領域の連結成分数（= シェイプのまとまりの数）
-    let binary = GrayImage::from_fn(pw, ph, |x, y| {
-        if positive_map[(y * pw + x) as usize] {
-            Luma([255u8])
-        } else {
-            Luma([0u8])
-        }
-    });
-    let labeled = connected_components(&binary, Connectivity::Eight, Luma([0u8]));
-    let region_count = labeled.pixels().map(|p| p[0]).max().unwrap_or(0);
+    // ポジティブ領域の連結成分数を再カウント（スタークビュー画像から）
+    let stark_img = build_stark(&positive_map, pw, ph);
+    let labeled_pos = connected_components(&stark_img, Connectivity::Eight, Luma([0u8]));
+    let region_count = labeled_pos.pixels().map(|p| p[0]).max().unwrap_or(0);
 
     // 複雑度ラベル（エッジ密度ベース）
     let complexity_ja = if edge_density < 0.04 {
@@ -161,11 +185,8 @@ pub fn analyze_shape_path(path_str: &str) -> Result<ShapeAnalysisDto, String> {
     }
     .to_string();
 
-    // スタークビュー（白黒 PNG）
-    let stark_img = build_stark(&positive_map, pw, ph);
     let stark_base64 = encode_gray_png(&stark_img)?;
 
-    // オーバーレイ（元画像 + 色マスク）
     let rgb = proc.to_rgb8();
     let overlay_img = build_overlay(&rgb, &positive_map, pw, ph);
     let overlay_base64 = encode_rgb_png(&overlay_img)?;
@@ -188,12 +209,17 @@ mod tests {
     use super::*;
     use image::{Rgba, RgbaImage};
 
-    fn dummy_png_path() -> std::path::PathBuf {
-        // テスト用に一時ファイルを作成
+    fn save_test_png(img: &RgbaImage) -> std::path::PathBuf {
+        let path = std::env::temp_dir().join("shape_test.png");
+        img.save(&path).expect("save test png");
+        path
+    }
+
+    #[test]
+    fn returns_valid_dto_for_simple_image() {
         let mut img = RgbaImage::new(80, 80);
-        for y in 0..80 {
-            for x in 0..80 {
-                // 中央に白い四角、周囲は黒
+        for y in 0..80u32 {
+            for x in 0..80u32 {
                 let px = if x >= 20 && x < 60 && y >= 20 && y < 60 {
                     Rgba([220, 220, 220, 255])
                 } else {
@@ -202,19 +228,25 @@ mod tests {
                 img.put_pixel(x, y, px);
             }
         }
-        let path = std::env::temp_dir().join("shape_test.png");
-        img.save(&path).expect("save test png");
-        path
-    }
-
-    #[test]
-    fn returns_valid_dto_for_simple_image() {
-        let path = dummy_png_path();
+        let path = save_test_png(&img);
         let dto = analyze_shape_path(path.to_str().unwrap()).expect("analyze");
         assert!(dto.positive_area_pct >= 0.0 && dto.positive_area_pct <= 100.0);
         assert!((dto.positive_area_pct + dto.negative_area_pct - 100.0).abs() < 0.1);
         assert!(dto.edge_density >= 0.0 && dto.edge_density <= 1.0);
         assert!(!dto.stark_base64.is_empty());
         assert!(!dto.overlay_base64.is_empty());
+    }
+
+    #[test]
+    fn solid_color_image_is_all_negative() {
+        // 単色画像はエッジなし → 全てネガティブ（四隅から繋がる）
+        let img = RgbaImage::from_pixel(60, 60, Rgba([100u8, 149, 237, 255]));
+        let path = save_test_png(&img);
+        let dto = analyze_shape_path(path.to_str().unwrap()).expect("analyze");
+        assert!(
+            dto.positive_area_pct < 5.0,
+            "単色画像のポジ率は小さいはず: {}",
+            dto.positive_area_pct
+        );
     }
 }
