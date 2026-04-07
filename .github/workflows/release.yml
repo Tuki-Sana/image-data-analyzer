@@ -16,8 +16,6 @@ jobs:
         include:
           - os: macos-latest
             name: macOS (Apple Silicon)
-          - os: macos-13
-            name: macOS (Intel)
           - os: windows-latest
             name: Windows
 
