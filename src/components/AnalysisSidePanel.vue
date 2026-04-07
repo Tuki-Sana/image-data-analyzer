@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { harmonyScoreLegendLines } from "../constants/harmonyScoreLegend";
-import type { Analysis, PickerPaletteEntry, PixelSample } from "../types/analysis";
+import type { Analysis, PickerPaletteEntry, PixelSample, ShapeAnalysis } from "../types/analysis";
 import type { ColorAuxMode } from "../utils/colorFormat";
+import ShapeAnalysisPanel from "./ShapeAnalysisPanel.vue";
 import { formatAuxColor } from "../utils/colorFormat";
 import {
   PICKER_LABEL_MAX,
@@ -19,6 +20,9 @@ const props = defineProps<{
   activePaletteSet: PickerPaletteSet;
   canDeletePaletteSet: boolean;
   pickerPalette: PickerPaletteEntry[];
+  shapeAnalysis: ShapeAnalysis | null;
+  shapeLoading: boolean;
+  shapeError: string;
 }>();
 
 const colorAuxMode = defineModel<ColorAuxMode>("colorAuxMode", { required: true });
@@ -44,6 +48,7 @@ const emit = defineEmits<{
   copyPickerPaletteJson: [];
   savePickerPaletteJson: [];
   clearPickerPalette: [];
+  analyzeShape: [];
 }>();
 
 function gistRowClass(role: string): string {
@@ -584,6 +589,14 @@ function gistRowClass(role: string): string {
         </template>
       </dl>
     </section>
+
+    <ShapeAnalysisPanel
+      :analysis="props.analysis"
+      :shape-analysis="props.shapeAnalysis"
+      :shape-loading="props.shapeLoading"
+      :shape-error="props.shapeError"
+      @analyze="emit('analyzeShape')"
+    />
 
     <details class="block json-export-fold">
       <summary class="json-export-summary">

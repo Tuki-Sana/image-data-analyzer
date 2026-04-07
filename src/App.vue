@@ -14,6 +14,7 @@ import { useGlossaryModal } from "./composables/useGlossaryModal";
 import { useImageAnalysisSession } from "./composables/useImageAnalysisSession";
 import { usePaletteDangerConfirm } from "./composables/usePaletteDangerConfirm";
 import { usePickerPaletteApp } from "./composables/usePickerPaletteApp";
+import { useShapeAnalysis } from "./composables/useShapeAnalysis";
 import { installAppMenu } from "./setupAppMenu";
 
 const appDisplayName = APP_DISPLAY_NAME;
@@ -29,6 +30,14 @@ const {
 } = useGlossaryModal();
 
 const pdfHostRef = useTemplateRef<HTMLElement>("pdfHost");
+
+const {
+  shapeAnalysis,
+  shapeLoading,
+  shapeError,
+  analyzeShape,
+  clearShape,
+} = useShapeAnalysis();
 
 const {
   loading,
@@ -47,6 +56,11 @@ const {
   savePdf,
   importAnalysisJson,
 } = useImageAnalysisSession({ showToast, pdfHostRef });
+
+function closeImageAndClear() {
+  closeImage();
+  clearShape();
+}
 
 const {
   paletteState,
@@ -81,7 +95,7 @@ onMounted(() => {
   void installAppMenu(
     {
       openImage,
-      closeImage,
+      closeImage: closeImageAndClear,
       copyJson,
       saveJson,
       savePdf,
@@ -126,6 +140,9 @@ onMounted(() => {
           :active-palette-set="activePaletteSet"
           :can-delete-palette-set="canDeletePaletteSet"
           :picker-palette="pickerPalette"
+          :shape-analysis="shapeAnalysis"
+          :shape-loading="shapeLoading"
+          :shape-error="shapeError"
           @copy-text="copyText"
           @add-picked-to-palette="addPickedToPalette"
           @open-glossary="openGlossary"
@@ -143,6 +160,7 @@ onMounted(() => {
           @copy-picker-palette-json="copyPickerPaletteJson"
           @save-picker-palette-json="savePickerPaletteJson"
           @clear-picker-palette="clearPickerPalette"
+          @analyze-shape="analyzeShape(analysis.path)"
         />
       </div>
     </div>
