@@ -16,8 +16,13 @@ jobs:
         include:
           - os: macos-latest
             name: macOS (Apple Silicon)
+            tauri_args: '--target aarch64-apple-darwin'
+          - os: macos-latest
+            name: macOS (Intel)
+            tauri_args: '--target x86_64-apple-darwin'
           - os: windows-latest
             name: Windows
+            tauri_args: ''
 
     name: Build ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
@@ -35,9 +40,14 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      - name: Add Rust targets for macOS
+        if: runner.os == 'macOS'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: ${{ matrix.name }}
 
       - run: pnpm install --frozen-lockfile
 
@@ -47,6 +57,16 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: ${{ github.ref_name }}
-          releaseBody: "See CHANGELOG.md for details."
+          releaseBody: |
+            変更の詳細は **[CHANGELOG.md](${{ github.server_url }}/${{ github.repository }}/blob/main/CHANGELOG.md)** を参照してください。
+
+            ### ダウンロードの選び方
+            - **macOS（Apple Silicon）**: ファイル名に **`aarch64`** が付いた `.dmg` または `.app.tar.gz`
+            - **macOS（Intel）**: ファイル名に **`x64`** が付いた `.dmg`（CPU はファイル名で区別）
+            - **Windows**: **`x64-setup.exe`** または **`x64_en-US.msi`**
+
+            ### macOS で「開発元を確認できません」と表示されるとき
+            Apple Developer による公証・署名は行っていないため、初回起動時にブロックされることがあります。**アプリを右クリック →「開く」**から起動するか、**システム設定 → プライバシーとセキュリティ**で許可してください。
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.tauri_args }}

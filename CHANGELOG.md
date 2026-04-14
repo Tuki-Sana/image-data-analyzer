@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-04-14
+
+マイナー相当。**分析 JSON の `schemaVersion`（4）・パレット LocalStorage スキーマ（1）・解析アルゴリズム**に変更はありません。
+
+### Changed
+
+- **リリースワークフロー**（[`.github/workflows/release.yml`](.github/workflows/release.yml)）: macOS を **Apple Silicon（`aarch64-apple-darwin`）** と **Intel（`x86_64-apple-darwin`）** で分别ビルドし、GitHub Releases に両アーキテクチャのバンドルを添付するようにした（`rustup target add` と `tauri build --target …`）。リリース下書きの本文に**ダウンロードの選び方**と**macOS 初回起動の注意**の日本語テンプレートを埋め込み（詳細は引き続き CHANGELOG を参照）
+
+### Documentation
+
+- [README](README.md): バージョン表記を 0.4.0 に更新
+
 ## [0.3.0] - 2026-04-07
 
 マイナー相当。**分析 JSON の `schemaVersion`（4）・パレット LocalStorage スキーマ（1）・解析アルゴリズム**に変更はありません。
@@ -11,7 +23,7 @@
 ### Added
 
 - **配色の役割分類**（[`src/utils/colorRole.ts`](src/utils/colorRole.ts)）: 支配色の累積面積比をもとに**ベース / アソート / アクセント**を分類（デフォルトしきい値 70 / 95）。`AnalysisSidePanel` に統合し、スライダーでしきい値を調整可能。各色の**個別 %** と**累積 %**（しきい値との関係を示す）を並記
-- **リリースワークフロー**（[`.github/workflows/release.yml`](.github/workflows/release.yml)）: `v*` タグのプッシュで macOS（Apple Silicon / Intel）・Windows の成果物を自動ビルドし GitHub Releases に下書きで作成
+- **リリースワークフロー**（[`.github/workflows/release.yml`](.github/workflows/release.yml)）: `v*` タグのプッシュで macOS（Apple Silicon）・Windows の成果物を自動ビルドし GitHub Releases に下書きで作成
 
 ### Removed
 
