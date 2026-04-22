@@ -1,4 +1,4 @@
-# Image Data Analyzer（Tauri + Vue）
+# Teinte（Tauri + Vue）
 
 画像を外部サーバーに送らず、ローカルで解像度・EXIF・色やコントラストを確認するためのデスクトップアプリです。支配色や Open Color / Tailwind への近似、WCAG に基づくコントラストに加え、**PCCS 風のトーン分類（非公式の近似）**と**色相の調和スコア（独自の簡易指標）**も表示します。
 
