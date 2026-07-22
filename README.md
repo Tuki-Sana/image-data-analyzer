@@ -6,7 +6,7 @@
 
 イラスト制作で繰り返す「画像から色を拾う」「肌・髪・影などの用途名を付ける」「カラーセットとして残す」「制作資料として JSON / PDF に書き出す」という作業を、1つのローカルアプリで扱うために作りました。画像そのものは外部サーバーへ送らず、手元の端末で解析します。
 
-**[最新版 v0.4.2 をダウンロード →](https://github.com/tsukasa-art/teinte/releases/tag/v0.4.2)**<br>
+**[最新版 v0.4.3 をダウンロード →](https://github.com/tsukasa-art/teinte/releases/tag/v0.4.3)**<br>
 macOS（Apple Silicon / Intel）・Windows向けの成果物をGitHub Releasesで公開しています。
 
 | 領域 | 技術 |
@@ -119,7 +119,7 @@ macOS の WebView では **`window.confirm` が表示されない**場合があ�
 
 ## バージョンとリリース
 
-`package.json`・`src-tauri/tauri.conf.json`・`src-tauri/Cargo.toml` の **version は同一の値**に揃えています（現在 **0.4.2**）。README 本文に同じ版番号が複数ある場合は、**リリース時にまとめて更新**してください。変更履歴は **`CHANGELOG.md`** を参照してください。
+`package.json`・`src-tauri/tauri.conf.json`・`src-tauri/Cargo.toml` の **version は同一の値**に揃えています（現在 **0.4.3**）。README 本文に同じ版番号が複数ある場合は、**リリース時にまとめて更新**してください。変更履歴は **`CHANGELOG.md`** を参照してください。
 
 **セマンティックバージョニング（目安）**: `x.y.z` で、**メジャー `x`** は互換性の大きな断ち切り、**マイナー `y`** は後方互換を保った機能追加や利用者に伝えたい変更（解析結果の意味が変わる更新など）、**パッチ `z`** はバグ修正や内部リファクタ・ドキュメント中心、という整理です。**1.0 未満（0.y.z）**の間も同じ考え方を目安にし、**分析 JSON の `schemaVersion` やパレットの `schemaVersion`** はアプリの `x.y.z` とは別ライフサイクルです（上記「データの保存場所」も参照）。
 
@@ -127,11 +127,11 @@ macOS の WebView では **`window.confirm` が表示されない**場合があ�
 
 ```bash
 git push origin main
-git tag -a v0.4.2 -m "0.4.2"
-git push origin v0.4.2
+git tag -a v0.4.3 -m "0.4.3"
+git push origin v0.4.3
 ```
 
-`git push` だけではタグは送られません。タグをリモートに載せるときは `git push origin v0.4.2` が必要です。リモート名は環境に合わせて読み替えてください。
+`git push` だけではタグは送られません。タグをリモートに載せるときは `git push origin v0.4.3` が必要です。リモート名は環境に合わせて読み替えてください。
 
 ## 技術スタック
 
@@ -186,8 +186,8 @@ pnpm tauri build    # 配布用ビルド
 `v*` タグをプッシュすると **`.github/workflows/release.yml`** が起動し、macOS（Apple Silicon / Intel それぞれ・ファイル名は `aarch64` / `x64` などで区別）・Windows の成果物を自動ビルドして GitHub Releases に**下書き**で作成します。内容を確認してから手動で公開してください。
 
 ```bash
-git tag -a v0.4.2 -m "0.4.2"
-git push origin v0.4.2
+git tag -a v0.4.3 -m "0.4.3"
+git push origin v0.4.3
 ```
 
 > **macOS でのインストール注意**: Apple Developer 証明書による署名・公証を行っていないため、初回起動時に「壊れているため開けません」または「開発元を確認できません」と表示されることがあります。その場合はターミナルで以下を実行してから起動してください。

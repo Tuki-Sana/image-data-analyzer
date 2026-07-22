@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-07-22
+
 ### Changed
 
 - 旧 `schemaVersion: 3 / 4` の分析 JSON は `harmonyScores` を含む場合も引き続き読み込み可能。新しくコピー・保存する共有 JSON では同フィールドを省略し、UI では実験的表示へ降格、ひと目サマリと共有 PDF からも除外
