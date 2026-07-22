@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 旧 `schemaVersion: 3 / 4` の分析 JSON は `harmonyScores` を含む場合も引き続き読み込み可能。新しくコピー・保存する共有 JSON では同フィールドを省略し、UI では実験的表示へ降格、ひと目サマリと共有 PDF からも除外
+- 共有用の分析 JSON / PDF では元画像の絶対パスを出さず、ファイル名だけを記録。EXIF・更新日時などは共有前に確認するよう UI / README に説明を追加
+- 画像選択対象を、現在の Rust decoder で扱える PNG / JPEG / GIF / WebP / BMP に限定
+- README にイラスト制作での利用背景、操作フロー、現行 UI、既知の制限、英語導線を追加
+
 ## [0.4.2] - 2026-04-22
 
 パッチ相当。**分析 JSON の `schemaVersion`（4）・パレット LocalStorage スキーマ（1）・解析アルゴリズム・UI**に変更はありません。

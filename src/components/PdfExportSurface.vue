@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { APP_DISPLAY_NAME } from "../constants/appMeta";
-import { harmonyScoreLegendLines } from "../constants/harmonyScoreLegend";
 import type { Analysis } from "../types/analysis";
 import type { ColorAuxMode } from "../utils/colorFormat";
 import { colorAuxModeLabel, formatAuxColor } from "../utils/colorFormat";
+import { sharedFileName } from "../utils/sharedDocument";
 
 const props = defineProps<{
   analysis: Analysis;
@@ -40,7 +40,7 @@ const appName = APP_DISPLAY_NAME;
     />
 
     <h2 class="pdf-h2">ファイル</h2>
-    <p class="pdf-mono pdf-path">{{ analysis.path }}</p>
+    <p class="pdf-mono pdf-path">{{ sharedFileName(analysis.path) }}</p>
     <p>
       {{ analysis.width }} × {{ analysis.height }} px
       <template v-if="analysis.fileSizeDisplay">
@@ -189,23 +189,6 @@ const appName = APP_DISPLAY_NAME;
       </ul>
     </template>
 
-    <template v-if="analysis.harmonyScores.length">
-      <h2 class="pdf-h2">色相調和スコア（参考・％表示・内部は 0〜1）</h2>
-      <p class="pdf-muted">
-        彩度が十分な支配色の加重に基づく参考値です。公式の調和理論の再現ではありません。
-      </p>
-      <div class="pdf-harmony-legend">
-        <p v-for="(line, hi) in harmonyScoreLegendLines" :key="hi" class="pdf-legend-line">
-          {{ line }}
-        </p>
-      </div>
-      <ul class="pdf-list">
-        <li v-for="h in analysis.harmonyScores" :key="h.id">
-          {{ h.labelJa }} … {{ (h.score * 100).toFixed(0) }}%
-        </li>
-      </ul>
-    </template>
-
     <h2 class="pdf-h2">EXIF</h2>
     <template v-if="!analysis.exif.length">
       <p>このファイルからは EXIF を読み取れませんでした。</p>
@@ -219,7 +202,7 @@ const appName = APP_DISPLAY_NAME;
 
     <p class="pdf-foot">
       プレビューはアプリ内生成の JPEG です。Open Color / Tailwind 近似は CIEDE2000
-      に基づく参考値です。色彩理論メモ・調和スコアも参考であり、公式 PCCS や教科書的定義の再現ではありません。
+      に基づく参考値です。色彩理論メモは公式 PCCS や教科書的定義の再現ではありません。
     </p>
   </div>
 </template>

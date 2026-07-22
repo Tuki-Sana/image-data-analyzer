@@ -85,7 +85,7 @@ sequenceDiagram
 | **LocalStorage** | スポイトパレット（`schemaVersion: 1` の複数カラーセット形式、キー `teinte.pickerPalette`）。Rust は介さない。開発時は **`pnpm tauri dev`** の埋め込み WebView と **`pnpm dev` だけ**のブラウザタブでは、同じ `localhost` でも **ストレージが別**のため **パレットは共有されない**。利用者向けの詳細は [README.md](../README.md) の「データの保存場所」を参照。 |
 | **analysisImport / pickerPaletteImport** | ファイルから読んだ JSON 文字列を、画面用の型にパース（Vitest で検証）。分析 JSON の `schemaVersion` は Rust 側の **`ANALYSIS_SCHEMA_VERSION`（現在 4）** と一致するのが新規エクスポートの目安（旧番号も読み込み可）。 |
 
-PDF 書き出しは **`PdfExportSurface.vue`**（プレビュー・ファイル情報・主要色・gist・**Open/Tailwind 近似（ΔE2000）**・WCAG・**色彩理論メモ（TheoryBlock）**・調和・EXIF）を **html2canvas + jsPDF** で DOM 画像化し、生成バイト列を `save_binary_file`（invoke 経由）で保存する流れです。**セクション順はメイン画面の解析表示に揃えています**（折りたたみは PDF では常に展開した形）。
+PDF 書き出しは **`PdfExportSurface.vue`**（プレビュー・ファイル情報・主要色・gist・**Open/Tailwind 近似（ΔE2000）**・WCAG・**色彩理論メモ（TheoryBlock）**・EXIF）を **html2canvas + jsPDF** で DOM 画像化し、生成バイト列を `save_binary_file`（invoke 経由）で保存する流れです。元画像の絶対パスはファイル名へ縮退し、実験的な色相配置値は共有 PDF に含めません。
 
 ## Rust ソースモジュール（`src-tauri/src/`）
 
@@ -94,12 +94,12 @@ PDF 書き出しは **`PdfExportSurface.vue`**（プレビュー・ファイル�
 | ファイル | 役割 |
 |----------|------|
 | `lib.rs` | Tauri エントリ、`invoke` コマンドの登録とディスパッチ |
-| `analyze.rs` | 画像読込、支配色・EXIF・プレビュー、Open/Tailwind 照合、`TheoryBlock`・調和・gist を含む **解析結果 JSON の組み立て** |
+| `analyze.rs` | 画像読込、支配色・EXIF・プレビュー、Open/Tailwind 照合、`TheoryBlock`・互換用の実験値・gist を含む **解析結果 JSON の組み立て** |
 | `meta.rs` | **支配色**（間引き・Lab k-means）、ファイルサイズ・更新日時、EXIF 行の列挙 |
 | `color_theory.rs` | sRGB↔Lab、**CIEDE2000**・CIE76、WCAG コントラスト |
 | `palette_match.rs` | Open Color / Tailwind JSON の読込と **ΔE2000 最近傍** |
 | `theory.rs` | PCCS 風トーン・色相帯・加重平均色相（色彩理論ブロック） |
-| `harmony.rs` | **色相調和スコア**（類似・補色・分割補色・トライアド・テトラード） |
+| `harmony.rs` | 互換性のため保持する**実験的な旧色相配置値**。未使用の理想角を評価できず、調和型への適合判定には使わない |
 
 **配色の役割分類**（ベース / アソート / アクセント）は Rust を介さず、フロントの [`src/utils/colorRole.ts`](../src/utils/colorRole.ts) で支配色の累積 `pct` を使って計算します（`invoke` なし）。
 
@@ -150,5 +150,5 @@ teinte/
 ## 関連ドキュメント
 
 - 利用者向けの機能説明・用語の説明・開発コマンド: リポジトリ直下の [README.md](../README.md)
-- 画像解析・支配色・色差（ΔE2000）・調和スコアなどの**アルゴリズム概要**: [image-analysis.md](./image-analysis.md)
+- 画像解析・支配色・色差（ΔE2000）・実験値の既知の制限などの**アルゴリズム概要**: [image-analysis.md](./image-analysis.md)
 - バージョンごとの変更履歴: リポジトリ直下の [CHANGELOG.md](../CHANGELOG.md)

@@ -575,10 +575,10 @@ function gistRowClass(role: string): string {
       class="block fold"
     >
       <summary class="fold-summary">
-        色相調和スコア（参考・％表示・内部は 0〜1）
+        実験的な色相配置メモ（既知の制限あり）
       </summary>
       <p class="muted small fold-disclaimer">
-        彩度が十分な支配色の加重に基づく参考値です。公式の調和理論の再現ではありません。
+        互換性のため既存の計算値を残していますが、欠けている理想色相を評価できないため、補色・トライアド等への適合度としては使用できません。
         <button
           type="button"
           class="glossary-jump"
@@ -592,7 +592,7 @@ function gistRowClass(role: string): string {
           {{ line }}
         </li>
       </ul>
-      <ul class="harmony-list" aria-label="色相調和スコアの一覧">
+      <ul class="harmony-list" aria-label="実験的な旧色相配置値の一覧">
         <li
           v-for="h in props.analysis.harmonyScores"
           :key="h.id"
@@ -683,6 +683,13 @@ function gistRowClass(role: string): string {
           </span>
         </li>
       </ul>
+    </section>
+
+    <section class="block export-privacy-note" aria-label="書き出し時のプライバシー">
+      <h2 class="h">書き出し時の確認</h2>
+      <p class="muted small">
+        共有用 JSON / PDF では元画像の絶対パスを出さず、ファイル名だけを記録します。EXIF、更新日時、画像寸法、解析結果は含まれることがあるため、第三者へ渡す前に内容を確認してください。PDF は画面内容をラスタ画像として出力します。
+      </p>
     </section>
 
     <details class="block json-export-fold">

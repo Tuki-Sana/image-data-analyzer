@@ -5,6 +5,7 @@ import type { Analysis, PixelSample } from "../types/analysis";
 import { parseAnalysisExportJson } from "../utils/analysisImport";
 import { buildPdfFromElement } from "../utils/pdfExport";
 import { readJsonTextFileDialog } from "../utils/readJsonTextFileDialog";
+import { buildSharedAnalysisJson } from "../utils/sharedDocument";
 
 /** host 内の全 img 要素が読み込まれるまで待つ。タイムアウト ms を超えたら強行する */
 function waitForHostImages(host: HTMLElement, timeoutMs = 3000): Promise<void> {
@@ -30,20 +31,6 @@ function waitForHostImages(host: HTMLElement, timeoutMs = 3000): Promise<void> {
       img.addEventListener("error", onSettle, { once: true });
     }
   });
-}
-
-function buildExportObject(a: Analysis) {
-  const { previewJpegBase64: _omit, ...rest } = a;
-  return {
-    ...rest,
-    exportedAt: new Date().toISOString(),
-    previewJpegBase64Omitted: true,
-    note: "プレビュー画像の base64 はファイルサイズのため省略（分析数値のみの資産向け）",
-  };
-}
-
-function buildExportJson(a: Analysis): string {
-  return JSON.stringify(buildExportObject(a), null, 2);
 }
 
 export function useImageAnalysisSession(options: {
@@ -76,7 +63,7 @@ export function useImageAnalysisSession(options: {
   const exportJsonText = computed(() => {
     const a = analysis.value;
     if (!a) return "";
-    return buildExportJson(a);
+    return buildSharedAnalysisJson(a);
   });
 
   async function openImage() {
@@ -94,9 +81,6 @@ export function useImageAnalysisSession(options: {
             "gif",
             "bmp",
             "webp",
-            "ico",
-            "tiff",
-            "tif",
           ],
         },
       ],
@@ -161,7 +145,7 @@ export function useImageAnalysisSession(options: {
   async function copyJson() {
     const a = analysis.value;
     if (!a) return;
-    const text = buildExportJson(a);
+    const text = buildSharedAnalysisJson(a);
     try {
       await navigator.clipboard.writeText(text);
       showToast("JSON をクリップボードにコピーしました");
@@ -178,7 +162,7 @@ export function useImageAnalysisSession(options: {
       defaultPath: "color-analysis.json",
     });
     if (outPath === null) return;
-    const text = buildExportJson(a);
+    const text = buildSharedAnalysisJson(a);
     try {
       await invoke("save_text_file", { path: outPath, contents: text });
       showToast("JSON を保存しました");

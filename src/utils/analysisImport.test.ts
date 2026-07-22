@@ -25,7 +25,9 @@ describe("parseAnalysisExportJson", () => {
         dominantDetails: [],
         dominantHueSummaryJa: null,
       },
-      harmonyScores: [],
+      harmonyScores: [
+        { id: "legacy", labelJa: "旧実験値", score: 0.5 },
+      ],
       gist: { lines: [], gistJa: "" },
     });
     const res = parseAnalysisExportJson(text);
@@ -33,6 +35,31 @@ describe("parseAnalysisExportJson", () => {
     if (res.ok) {
       expect(res.analysis.dominants).toHaveLength(1);
       expect(res.analysis.previewJpegBase64).toBe("");
+      expect(res.analysis.schemaVersion).toBe(4);
+      expect(res.analysis.path).toBe("/tmp/x.png");
+      expect(res.analysis.harmonyScores).toEqual([
+        { id: "legacy", labelJa: "旧実験値", score: 0.5 },
+      ]);
+    }
+  });
+
+  it("keeps schema 3 imports compatible when harmony data is absent", () => {
+    const text = JSON.stringify({
+      schemaVersion: 3,
+      path: "/Users/example/Pictures/legacy.png",
+      width: 64,
+      height: 32,
+      dominants: [
+        { r: 12, g: 34, b: 56, pct: 100, hex: "#0C2238" },
+      ],
+    });
+
+    const res = parseAnalysisExportJson(text);
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.analysis.schemaVersion).toBe(3);
+      expect(res.analysis.path).toBe("/Users/example/Pictures/legacy.png");
+      expect(res.analysis.harmonyScores).toEqual([]);
     }
   });
 

@@ -1,4 +1,6 @@
-//! 支配色の色相から、代表的な調和パターンへの「当てはまり度」スコア（0〜1 目安、独自定義）。
+//! 互換性のため保持する実験的な旧色相配置値。
+//!
+//! テンプレートの未使用角を評価しないため、調和パターンへの適合度としては使用しない。
 
 use serde::Serialize;
 
@@ -123,7 +125,11 @@ pub fn harmony_scores(weighted_hues: &[(f64, f64)]) -> Vec<HarmonyScoreDto> {
         },
     ];
 
-    out.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    out.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     for s in &mut out {
         s.score = (s.score * 1000.0).round() / 1000.0;
     }

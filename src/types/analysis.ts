@@ -89,6 +89,7 @@ export interface Analysis {
   tailwindMatches: PaletteMatch[];
   wcagDominantPair: WcagDominantPair | null;
   theory: TheoryBlock;
+  /** 互換性のため保持する実験的な旧計算値。調和型への適合判定には使わない。 */
   harmonyScores: HarmonyScore[];
   gist: AnalysisGist;
 }

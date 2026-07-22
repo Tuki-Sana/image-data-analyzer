@@ -101,9 +101,9 @@ pub struct Analysis {
     pub wcag_dominant_pair: Option<WcagDominantPairDto>,
     /// PCCS 風トーン・色相・概論対応メモ（非公式近似）
     pub theory: TheoryBlock,
-    /// 色相調和パターンの当てはまり度（独自スコア）
+    /// 互換性のため保持する実験的な旧色相配置値。調和型への適合判定には使わない。
     pub harmony_scores: Vec<harmony::HarmonyScoreDto>,
-    /// ひと目サマリ（支配色 1〜3 位のパレット近さ・調和の要約）
+    /// ひと目サマリ（支配色 1〜3 位のパレット近さ等。実験的な色相配置値は含めない）
     pub gist: AnalysisGistDto,
 }
 
@@ -145,8 +145,7 @@ fn jpeg_preview_base64(img: &image::DynamicImage) -> Result<(String, u32, u32), 
     let (tw, th) = rgb.dimensions();
     let mut buf = Vec::new();
     let mut c = Cursor::new(&mut buf);
-    rgb
-        .write_to(&mut c, ImageFormat::Jpeg)
+    rgb.write_to(&mut c, ImageFormat::Jpeg)
         .map_err(|e| e.to_string())?;
     let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &buf);
     Ok((b64, tw, th))
@@ -168,7 +167,8 @@ pub fn analyze_path(path_str: &str) -> Result<Analysis, String> {
     let preview_bg_dark = average_luminance(&rgba) >= 0.52;
     let palette = meta::dominant_colors(&rgba, 8);
     let open_raw = palette_match::match_dominants(&palette, palette_match::open_color_palette());
-    let tail_raw = palette_match::match_dominants(&palette, palette_match::tailwind_subset_palette());
+    let tail_raw =
+        palette_match::match_dominants(&palette, palette_match::tailwind_subset_palette());
 
     let dominants: Vec<DominantDto> = palette
         .iter()
@@ -245,7 +245,7 @@ pub fn analyze_path(path_str: &str) -> Result<Analysis, String> {
         })
         .collect();
     let harmony_scores = harmony::harmony_scores(&weighted_hues);
-    let gist = build_analysis_gist(&theory, &open_color_matches, &tailwind_matches, &harmony_scores);
+    let gist = build_analysis_gist(&theory, &open_color_matches, &tailwind_matches);
 
     Ok(Analysis {
         schema_version: ANALYSIS_SCHEMA_VERSION,
@@ -274,7 +274,6 @@ fn build_analysis_gist(
     theory: &TheoryBlock,
     open: &[PaletteMatchDto],
     tail: &[PaletteMatchDto],
-    harmony: &[harmony::HarmonyScoreDto],
 ) -> AnalysisGistDto {
     let mut lines: Vec<GistLineDto> = Vec::new();
 
@@ -315,48 +314,6 @@ fn build_analysis_gist(
         lines.push(GistLineDto {
             text: "理論的な「正しいパレット」とは別軸です。全支配色の一覧は下の各セクションを参照してください。"
                 .to_string(),
-            role: "foot".to_string(),
-        });
-    }
-
-    if !harmony.is_empty() {
-        lines.push(GistLineDto {
-            text: "色相の組み合わせ（参考）".to_string(),
-            role: "label".to_string(),
-        });
-        let top = &harmony[0];
-        let harmony_foot =
-            "デザインの良し悪しではなく、色相の組み合わせが代表的な調和型にどれだけ近いかの目安です。";
-        if top.score < 0.1 {
-            lines.push(GistLineDto {
-                text: "どの調和型にも強くは当てはまっていません（無彩色が多い・色相が散らばっていると低くなりがちです）。"
-                    .to_string(),
-                role: "body".to_string(),
-            });
-        } else {
-            lines.push(GistLineDto {
-                text: format!(
-                    "いちばん近い型（参考）: {}（{:.0}%）",
-                    top.label_ja,
-                    top.score * 100.0
-                ),
-                role: "body".to_string(),
-            });
-            if let Some(sec) = harmony.get(1) {
-                if sec.score >= 0.08 && sec.score >= top.score * 0.55 {
-                    lines.push(GistLineDto {
-                        text: format!(
-                            "次点: {}（{:.0}%）",
-                            sec.label_ja,
-                            sec.score * 100.0
-                        ),
-                        role: "body".to_string(),
-                    });
-                }
-            }
-        }
-        lines.push(GistLineDto {
-            text: harmony_foot.to_string(),
             role: "foot".to_string(),
         });
     }

@@ -59,7 +59,7 @@ pub fn hue_region_ja(h_deg: f64) -> &'static str {
     }
 }
 
-/// PCCS 風トーン（README の L*・C* 閾値に準拠。商標・公式定義の再現ではない）。
+/// PCCS 風トーン（L*・C* の便宜的な閾値。商標・公式定義の再現ではない）。
 pub fn pccs_style_tone(l: f64, c: f64) -> (&'static str, &'static str) {
     const C_GRAY: f64 = 8.0;
     const C_LOW: f64 = 18.0;
@@ -130,7 +130,7 @@ pub fn build_theory_block(palette: &[(u8, u8, u8, f32)]) -> TheoryBlock {
 
     let outline_mapping_ja = vec![
         "マンセル表色系の考え方: 色は色相・明度・彩度で記述できる → 本アプリでは L*（明度に近い）と a*b* から求めた彩度 C*・色相角 h° で対応づけています。".to_string(),
-        "PCCS のトーン: 明度と彩度をまとめた概念 → 本アプリでは L* と C* の閾値で「トーン風」の日本語ラベルを付与しています（README に閾値表）。".to_string(),
+        "PCCS のトーン: 明度と彩度をまとめた概念 → 本アプリでは L* と C* の便宜的な閾値で、非公式の「トーン風」日本語ラベルを付与しています。".to_string(),
         "色立体・固有明度: 色相ごとに最も鮮やかな色の明度が異なる → トーン名はあくまでラベルであり、立体上の厳密位置は示しません。".to_string(),
         "ΔE2000・パレット近似: 測色・色差の話であり、トーン理論とは別軸の指標です。".to_string(),
     ];
